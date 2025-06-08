@@ -1,69 +1,232 @@
-import re
-from Bio import SeqIO
-from dna_features_viewer import GraphicFeature, GraphicRecord
-import plotly.graph_objects as go
+from Bio.Seq import Seq
+from difflib import Differ
+import pandas as pd
+import subprocess
+import os
 
-def validate_sequence(dna_seq, allow_n=False):
-    seq = dna_seq.upper().replace('\n', '').replace(' ', '')
-    if len(seq) < 23:
-        return False, "Sequence too short. Minimum 23bp required."
-    pattern = r'[ATCGN]+' if allow_n else r'[ATCG]+'
-    if not re.fullmatch(pattern, seq):
-        return False, f"Invalid characters in DNA sequence. Only A/T/C/G{'/N' if allow_n else ''} allowed."
-    return True, seq
+def hybrid_score(guide, off_target_count=0, domain_penalty=0):
+    gc = (guide.count('G') + guide.count('C')) / len(guide)
+    seed = guide[-4:]
+    score = 1.0
+    if gc < 0.4 or gc > 0.7:
+        score -= 0.2
+    if "TTTT" in guide or "GGGG" in guide:
+        score -= 0.1
+    if seed.count("T") + seed.count("A") > 2:
+        score -= 0.1
+    if guide[-1] == "G":
+        score += 0.05
+    score -= 0.05 * off_target_count
+    score -= 0.2 * domain_penalty
+    return round(max(score, 0.0), 3)
 
-def load_fasta(uploaded_file):
+def ml_gRNA_score(guide):
+    gc = (guide.count('G') + guide.count('C')) / len(guide)
+    score = 0.5  # baseline
+    if 0.40 < gc < 0.60:
+        score += 0.2
+    elif 0.35 < gc <= 0.40 or 0.60 <= gc < 0.65:
+        score += 0.1
+    seed = guide[-4:]
+    if seed.count('T') + seed.count('A') <= 1:
+        score += 0.1
+    for b in "ATCG":
+        if b*4 in guide:
+            score -= 0.1
+    if guide[-1] == "G":
+        score += 0.05
+    if guide[0] == "T":
+        score -= 0.05
+    return round(max(0.0, min(score, 1.0)), 3)
+
+def check_pam(pam_seq, pam):
+    if pam == "NGG":
+        return pam_seq[1:] == "GG"
+    elif pam == "NAG":
+        return pam_seq[1:] == "AG"
+    elif pam == "TTTV":
+        return pam_seq[:3] == "TTT" and pam_seq[3] in "ACG"
+    return False
+
+def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70):
+    sequence = dna_seq.upper().replace("\n", "").replace(" ", "")
+    pam_len = len(pam)
+    guides = []
+    for i in range(len(sequence) - guide_length - pam_len + 1):
+        guide = sequence[i:i+guide_length]
+        pam_seq = sequence[i+guide_length:i+guide_length+pam_len]
+        if check_pam(pam_seq, pam):
+            gc = (guide.count('G') + guide.count('C')) / guide_length * 100
+            if min_gc <= gc <= max_gc and "TTTT" not in guide:
+                guides.append({
+                    "Strand": "+",
+                    "Start": i,
+                    "gRNA": guide,
+                    "PAM": pam_seq,
+                    "GC%": round(gc,2),
+                })
+    rc_sequence = str(Seq(sequence).reverse_complement())
+    for i in range(len(rc_sequence) - guide_length - pam_len + 1):
+        guide = rc_sequence[i:i+guide_length]
+        pam_seq = rc_sequence[i+guide_length:i+guide_length+pam_len]
+        if check_pam(pam_seq, pam):
+            gc = (guide.count('G') + guide.count('C')) / guide_length * 100
+            if min_gc <= gc <= max_gc and "TTTT" not in guide:
+                guides.append({
+                    "Strand": "-",
+                    "Start": len(sequence)-i-guide_length-pam_len,
+                    "gRNA": guide,
+                    "PAM": pam_seq,
+                    "GC%": round(gc,2),
+                })
+    return pd.DataFrame(guides)
+
+def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
+    results = []
+    bg_seq = background_seq.upper().replace('\n', '')[:1_000_000]
+    for _, row in guides.iterrows():
+        guide = row["gRNA"]
+        details = []
+        for i in range(len(bg_seq) - len(guide) + 1):
+            window = bg_seq[i:i+len(guide)]
+            mismatches = sum(1 for a, b in zip(guide, window) if a != b)
+            if mismatches <= max_mismatches:
+                details.append({
+                    "Position": i,
+                    "Mismatches": mismatches,
+                    "Sequence": window
+                })
+        results.append({
+            "gRNA": guide,
+            "OffTargetCount": len(details),
+            "Details": details
+        })
+    flat = []
+    for result in results:
+        for detail in result["Details"]:
+            flat.append({
+                "gRNA": result["gRNA"],
+                "OffTargetPos": detail["Position"],
+                "Mismatches": detail["Mismatches"],
+                "TargetSeq": detail["Sequence"]
+            })
+    return pd.DataFrame(flat)
+
+def safe_translate(seq):
+    extra = len(seq) % 3
+    if extra != 0:
+        seq += "N" * (3 - extra)
     try:
-        records = list(SeqIO.parse(uploaded_file, "fasta"))
-        if not records:
-            return None, "No FASTA records found."
-        if len(records) > 1:
-            return str(records[0].seq), "Warning: Multiple FASTA records found. Only first record loaded."
-        return str(records[0].seq), ""
-    except Exception as e:
-        try:
-            uploaded_file.seek(0)
-            seq = uploaded_file.read().decode('utf-8').strip()
-            if seq and re.fullmatch(r'[ATCGN\n\r ]+', seq.upper()):
-                return seq.replace('\n', '').replace('\r', '').replace(' ', ''), ""
-        except Exception:
-            pass
-        return None, f"Error parsing FASTA or plain sequence: {e}"
+        return str(Seq(seq).translate(to_stop=True))
+    except Exception:
+        return "Translation failed (invalid codon)"
 
-def visualize_guide_location(dna_seq, guide, start_index, pam_seq=None, strand='+'):
-    features = [
-        GraphicFeature(
-            start=start_index,
-            end=start_index + len(guide),
-            label=f"gRNA {guide}",
-            color="#ffd700",
-            strand=+1 if strand == '+' else -1
-        )
+def simulate_protein_edit(seq, cut_index, edit_type="del1", insert_base="A", sub_from="A", sub_to="T"):
+    seq = seq.upper().replace('\n', '').replace(' ', '')
+    before = seq
+    after = seq
+    if edit_type == "del1":
+        after = seq[:cut_index] + seq[cut_index+1:]
+    elif edit_type == "insA":
+        after = seq[:cut_index] + insert_base + seq[cut_index:]
+    elif edit_type.startswith("del"):
+        del_len = int(edit_type[3:])
+        after = seq[:cut_index] + seq[cut_index+del_len:]
+    elif edit_type.startswith("ins"):
+        insert_base = edit_type[3:]
+        after = seq[:cut_index] + insert_base + seq[cut_index:]
+    elif edit_type == "subAG":
+        if cut_index + len(sub_from) <= len(seq):
+            after = seq[:cut_index] + sub_to + seq[cut_index+len(sub_from):]
+    try:
+        prot_before = safe_translate(before)
+        prot_after = safe_translate(after)
+    except Exception:
+        prot_before = prot_after = "Translation failed"
+    stop_lost = "*" in prot_after and "*" not in prot_before
+    frameshift = (len(after) % 3) != (len(before) % 3)
+    return prot_before, prot_after, frameshift, stop_lost
+
+def diff_proteins(before, after):
+    d = Differ()
+    result = []
+    for s in d.compare(before, after):
+        if s.startswith('+'):
+            result.append(f'**+{s[2:]}**')
+        elif s.startswith('-'):
+            result.append(f'~~{s[2:]}~~')
+        elif s.startswith('?'):
+            continue
+        else:
+            result.append(s)
+    return ''.join(result)
+
+def indel_simulations(seq, cut_index):
+    results = []
+    for n in [1,2,3]:
+        del_seq = seq[:cut_index] + seq[cut_index+n:]
+        del_prot = safe_translate(del_seq)
+        del_fs = (len(del_seq)%3 != 0)
+        results.append({
+            "Edit": f"del{n}",
+            "Protein": del_prot,
+            "Frameshift": del_fs
+        })
+        ins_seq = seq[:cut_index] + ("A"*n) + seq[cut_index:]
+        ins_prot = safe_translate(ins_seq)
+        ins_fs = (len(ins_seq)%3 != 0)
+        results.append({
+            "Edit": f"ins{n}",
+            "Protein": ins_prot,
+            "Frameshift": ins_fs
+        })
+    return pd.DataFrame(results)
+
+def scan_protein_domains(protein_seq, pfam_db_path="Pfam-A.hmm"):
+    tmp_fa = "temp_prot.fa"
+    tmp_tbl = "temp_tbl.txt"
+    with open(tmp_fa, "w") as f:
+        f.write(">query\n" + protein_seq + "\n")
+    cmd = [
+        "hmmscan", "--tblout", tmp_tbl,
+        pfam_db_path, tmp_fa
     ]
-    if pam_seq:
-        features.append(
-            GraphicFeature(
-                start=start_index + len(guide),
-                end=start_index + len(guide) + len(pam_seq),
-                label=f"PAM {pam_seq}",
-                color="#9acd32",
-                strand=+1 if strand == '+' else -1
-            )
-        )
-    record = GraphicRecord(sequence=dna_seq, features=features)
-    ax, _ = record.plot(figure_width=10)
-    return ax
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        domains = []
+        with open(tmp_tbl) as f:
+            for line in f:
+                if line.startswith("#"): continue
+                cols = line.strip().split()
+                if len(cols) > 18:
+                    domains.append({
+                        "Domain": cols[0],
+                        "StartAA": int(cols[17]),
+                        "EndAA": int(cols[18]),
+                        "Evalue": cols[6],
+                    })
+        os.remove(tmp_fa)
+        os.remove(tmp_tbl)
+        return pd.DataFrame(domains)
+    except Exception as e:
+        return pd.DataFrame([{"Domain": "ERROR", "StartAA": 0, "EndAA": 0, "Evalue": str(e)}])
 
-def plot_protein_domains(protein, domains, cut_site=None):
-    fig = go.Figure()
-    fig.add_shape(type="rect", x0=0, x1=len(protein), y0=0.4, y1=0.6, fillcolor="lightgray", line_width=0)
-    for _, d in domains.iterrows():
-        fig.add_shape(type="rect",
-                      x0=d["StartAA"], x1=d["EndAA"], y0=0.3, y1=0.7,
-                      fillcolor="orange", line_color="darkorange", opacity=0.7)
-        fig.add_annotation(x=(d["StartAA"]+d["EndAA"])/2, y=0.8, text=d["Domain"], showarrow=False, font_size=10)
-    if cut_site is not None:
-        fig.add_shape(type="line", x0=cut_site, x1=cut_site, y0=0.2, y1=0.8, line_color="red", line_width=3)
-    fig.update_yaxes(visible=False)
-    fig.update_layout(height=160, width=650, margin=dict(l=10, r=10, t=10, b=10))
-    return fig
+def annotate_protein_domains(seq):
+    prot = safe_translate(seq)
+    return scan_protein_domains(prot)
+
+def predict_hdr_repair(seq, cut_pos):
+    if cut_pos >= len(seq) - 1:
+        return "uncertain"
+    after = seq[:cut_pos] + seq[cut_pos+1:]
+    before_prot = safe_translate(seq)
+    after_prot = safe_translate(after)
+    if len(after) % 3 != len(seq) % 3:
+        if "*" in after_prot and "*" not in before_prot:
+            return "frameshift/early stop"
+        return "frameshift"
+    else:
+        if after_prot == before_prot:
+            return "silent"
+        else:
+            return "in-frame"
