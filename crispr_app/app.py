@@ -1,14 +1,13 @@
 import streamlit as st
 import pandas as pd
 from utils import validate_sequence, load_fasta, visualize_guide_location
-from analysis import find_gRNAs, find_off_targets, simulate_protein_edit, diff_proteins
+from analysis import find_gRNAs, find_off_targets_detailed, simulate_protein_edit, diff_proteins, indel_simulations
 
 GUIDE_TYPES = {
     "Cas9 NGG": "NGG",
     "Cas9 NAG": "NAG",
     "Cas12a TTTV": "TTTV"
 }
-
 EDIT_TYPES = {
     "Delete 1 bp": "del1",
     "Insert A": "insA",
@@ -36,6 +35,7 @@ with st.sidebar:
     min_gc = st.slider("Minimum GC%", 30, 60, 40)
     max_gc = st.slider("Maximum GC%", 60, 80, 70)
     bg_seq = st.text_area("Background DNA (for off-target)", height=100)
+    max_mismatches = st.slider("Max Mismatches (Off-target)", 0, 4, 2)
 
 if st.button("🔍 Find gRNAs"):
     valid, msg = validate_sequence(dna_seq)
@@ -52,18 +52,27 @@ if st.button("🔍 Find gRNAs"):
             csv = df.to_csv(index=False)
             st.download_button("⬇️ Download gRNAs", data=csv, file_name="guides.csv", mime="text/csv")
 
-            tab1, tab2, tab3, tab4 = st.tabs(["🔍 Off-target", "🧬 Simulation", "🤖 AI Explain", "🖼️ Visualization"])
+            tab1, tab2, tab3, tab4 = st.tabs([
+                "🔍 Off-targets (detailed)",
+                "🧬 Simulation & Indel",
+                "🤖 AI Explain",
+                "🖼️ Visualization"
+            ])
 
             with tab1:
                 if bg_seq.strip():
-                    ot_df = find_off_targets(df, bg_seq)
-                    st.dataframe(ot_df)
-                    st.download_button("⬇️ Download Off-target Results", data=ot_df.to_csv(index=False), file_name="offtarget.csv", mime="text/csv")
+                    ot_df = find_off_targets_detailed(df, bg_seq, max_mismatches)
+                    if ot_df.empty:
+                        st.info("No off-targets found in background DNA.")
+                    else:
+                        st.dataframe(ot_df)
+                        st.download_button("⬇️ Download Off-targets", data=ot_df.to_csv(index=False), file_name="offtargets.csv", mime="text/csv")
                 else:
                     st.info("Paste background DNA above to enable off-target search.")
 
             with tab2:
-                gRNA_choice = st.selectbox("Choose gRNA", df["gRNA"].tolist())
+                gRNA_list = df["gRNA"].tolist()
+                gRNA_choice = st.selectbox("Choose gRNA", gRNA_list)
                 cut_index = dna_seq.upper().find(gRNA_choice)
                 if cut_index != -1:
                     edit_label = st.selectbox("Edit Type", options=list(EDIT_TYPES.keys()))
@@ -87,19 +96,35 @@ Protein After Edit: {prot_after}
 Frameshift: {'Yes' if fs else 'No'}
 Premature Stop Codon: {'Yes' if stop else 'No'}
 """
-                    st.download_button("⬇️ Download Report", report, file_name="protein_report.txt")
+                    st.download_button("⬇️ Download Protein Report", report, file_name="protein_report.txt")
+
+                    # Show indel simulation table
+                    st.subheader("Indel Simulations (del/ins 1–3bp):")
+                    indel_df = indel_simulations(dna_seq, cut_index + guide_length)
+                    st.dataframe(indel_df)
+                    st.download_button("⬇️ Download Indel Results", data=indel_df.to_csv(index=False), file_name="indel_simulation.csv", mime="text/csv")
                 else:
                     st.warning("Selected gRNA not found in sequence.")
 
             with tab3:
+                gRNA_list = df["gRNA"].tolist()
+                gRNA_choice = gRNA_list[0] if gRNA_list else ""
                 ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"])
                 api_key = st.text_input("AI API Key", type="password")
                 gene_info = st.text_area("Describe the edit context", value=f"Editing at {gRNA_choice}")
-                if st.button("Ask AI"):
-                    st.info("This would connect to your Gemini/OpenAI API. (Demo mode in this version.)")
+                ask_ai = st.button("Ask AI")
+                if ask_ai:
+                    with st.spinner("Connecting to AI..."):
+                        st.info("This would connect to your Gemini/OpenAI API. (Demo mode in this version.)")
+                else:
+                    st.caption("Enter key and click 'Ask AI' for real-time explanation.")
 
             with tab4:
-                gRNA_choice = df["gRNA"].tolist()[0]
+                gRNA_list = df["gRNA"].tolist()
+                gRNA_choice = gRNA_list[0] if gRNA_list else ""
                 cut_index = dna_seq.upper().find(gRNA_choice)
-                ax = visualize_guide_location(dna_seq, gRNA_choice, cut_index)
-                st.pyplot(ax.figure)
+                if cut_index != -1:
+                    ax = visualize_guide_location(dna_seq, gRNA_choice, cut_index)
+                    st.pyplot(ax.figure)
+                else:
+                    st.info("Guide position could not be visualized.")
