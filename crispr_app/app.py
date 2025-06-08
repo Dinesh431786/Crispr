@@ -179,17 +179,38 @@ Premature Stop Codon: {'Yes' if stop else 'No'}
         else:
             st.warning("No gRNAs available for simulation.")
 
-    # --- AI Explain tab ---
+    # --- AI Explain tab (robust session-safe version!) ---
     with tab3:
         gRNA_list = df["gRNA"].tolist()
-        gRNA_choice = gRNA_list[0] if gRNA_list else ""
+        gRNA_choice = st.session_state.selected_gRNA if st.session_state.selected_gRNA in gRNA_list else (gRNA_list[0] if gRNA_list else "")
         gene_info = st.text_area("Describe the edit context", value=f"Editing at {gRNA_choice}", key="gene_info")
-        if st.button("Ask AI", key="ask_ai_button"):
-            # Example stub: integrate your Gemini/OpenAI API here using st.session_state.api_key
-            st.session_state.ai_response = (
-                f"Edit context for {gRNA_choice}: {gene_info} "
-                f"(AI explanation would appear here. Backend: {st.session_state.ai_backend})"
-            )
+        ai_button = st.button("Ask AI", key="ask_ai_button")
+
+        if ai_button:
+            if st.session_state.ai_backend == "Gemini":
+                try:
+                    import google.generativeai as genai
+                    genai.configure(api_key=st.session_state.api_key)
+                    model = genai.GenerativeModel('gemini-pro')
+                    response = model.generate_content(gene_info)
+                    st.session_state.ai_response = response.text
+                except Exception as e:
+                    st.session_state.ai_response = f"Error calling Gemini API: {e}"
+            elif st.session_state.ai_backend == "OpenAI":
+                try:
+                    import openai
+                    openai.api_key = st.session_state.api_key
+                    response = openai.ChatCompletion.create(
+                        model="gpt-3.5-turbo",
+                        messages=[
+                            {"role": "system", "content": "You are a bioinformatics expert."},
+                            {"role": "user", "content": gene_info}
+                        ]
+                    )
+                    st.session_state.ai_response = response.choices[0].message.content
+                except Exception as e:
+                    st.session_state.ai_response = f"Error calling OpenAI API: {e}"
+
         if st.session_state.ai_response:
             st.info(st.session_state.ai_response)
         else:
@@ -219,4 +240,3 @@ Premature Stop Codon: {'Yes' if stop else 'No'}
 
 else:
     st.info("Paste a DNA sequence and click 'Find gRNAs' to begin.")
-
