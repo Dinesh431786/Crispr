@@ -40,7 +40,7 @@ Based on published patterns in large gRNA screens (GC%, homopolymers, seed, posi
 **Interpretation:** Higher = more likely to work according to CRISPR data trends.
 
 **Consensus Score:**  
-Combines the Hybrid Score and ML Score into a single metric by averaging them: Consensus Score = (Hybrid Score + ML Score) / 2
+Combines the Hybrid Score and ML Score into a single metric by averaging them:  Consensus Score = (Hybrid Score + ML Score)
 
 This provides a balanced view, giving equal importance to laboratory rules and machine-learning predictions.  
 **Interpretation:** Use guides with the highest Consensus Scores for best results!
@@ -395,4 +395,3 @@ with tab_rank:
     else:
         st.info("Run off-target scan to get specificity ranking.")
 
-  
