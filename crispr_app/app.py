@@ -12,10 +12,12 @@ from analysis import (
     diff_proteins,
     indel_simulations,
     predict_hdr_repair,
-    # annotate_protein_domains REMOVED
 )
+import analysis
 
+# ──────────────────────────────────────────────
 # Score Explanations
+# ──────────────────────────────────────────────
 SCORE_EXPLAIN = """
 **Hybrid Score:**  
 - Practical laboratory rule-based score, range: **0.0 (poor) to 1.0 (ideal)**
@@ -32,7 +34,6 @@ SCORE_EXPLAIN = """
 
 st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
 st.title("🧬 CRISPR Lab NextGen – gRNA Designer & Impact Analyzer")
-
 st.markdown(SCORE_EXPLAIN)
 
 # ──────────────────────────────────────────────
@@ -115,7 +116,6 @@ if df is None or df.empty:
 # ──────────────────────────────────────────────
 # Add scores columns
 # ──────────────────────────────────────────────
-import analysis
 if "HybridScore" not in df.columns or "MLScore" not in df.columns:
     df["HybridScore"] = [analysis.hybrid_score(g) for g in df.gRNA]
     df["MLScore"] = [analysis.ml_gRNA_score(g) for g in df.gRNA]
@@ -124,8 +124,8 @@ st.success(f"✅ {len(df)} gRNAs found")
 st.dataframe(df, use_container_width=True)
 st.download_button("⬇️ Download gRNAs CSV", df.to_csv(index=False), "guides.csv")
 
-tab_ot, tab_sim, tab_vis, tab_rank = st.tabs(
-    ["Off-targets", "Simulation & Indel", "Visualization", "Ranking"]
+tab_ot, tab_sim, tab_ai, tab_vis, tab_rank = st.tabs(
+    ["Off-targets", "Simulation & Indel", "AI Explain", "Visualization", "Ranking"]
 )
 
 # ──────────────────────────────────────────────
@@ -220,6 +220,46 @@ with tab_sim:
     if st.session_state.sim_indel is not None:
         st.subheader("±1–3 bp indel simulation")
         st.dataframe(st.session_state.sim_indel, use_container_width=True)
+
+# ──────────────────────────────────────────────
+# AI Explain tab (Gemini/OpenAI)
+# ──────────────────────────────────────────────
+with tab_ai:
+    st.header("AI Explain (Gemini / OpenAI)")
+    ctx = st.text_area(
+        "Describe the edit context",
+        f"Editing at {st.session_state.selected_gRNA if st.session_state.selected_gRNA else 'your gRNA'}",
+        key="ai_ctx",
+    )
+    ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend")
+    api_key = st.text_input("API Key", type="password", key="api_key")
+    if st.button("Ask AI"):
+        if not api_key or len(api_key.strip()) < 10:
+            st.error("Enter a valid API key above.")
+        else:
+            try:
+                if ai_backend == "Gemini":
+                    import google.generativeai as genai
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel("gemini-1.5-pro-latest")
+                    result = model.generate_content(ctx)
+                    st.session_state.ai_response = result.text if hasattr(result, "text") else str(result)
+                else:
+                    import openai
+                    openai.api_key = api_key
+                    resp = openai.ChatCompletion.create(
+                        model="gpt-3.5-turbo",
+                        messages=[
+                            {"role": "system", "content": "You are a CRISPR genome editing expert."},
+                            {"role": "user", "content": ctx},
+                        ],
+                    )
+                    st.session_state.ai_response = resp.choices[0].message.content
+            except Exception as e:
+                import traceback
+                st.session_state.ai_response = "API error:\n" + traceback.format_exc(limit=2)
+    if st.session_state.ai_response:
+        st.info(st.session_state.ai_response)
 
 # ──────────────────────────────────────────────
 # Visualization tab
