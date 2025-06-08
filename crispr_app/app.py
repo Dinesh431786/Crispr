@@ -13,19 +13,20 @@ from analysis import (
     diff_proteins,
     indel_simulations,
     hybrid_score,
-    ml_gRNA_score,        # NEW: real ML model (even simple RF for demo)
-    predict_hdr_repair,   # NEW: repair logic
+    ml_gRNA_score,
+    predict_hdr_repair,
     annotate_protein_domains,
 )
 import datetime
 
-# --- Gemini imports
-import google.generativeai as genai
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 
 st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
 st.title("🧬 CRISPR Lab NextGen – Advanced AI-Powered gRNA Designer")
 
-# Sidebar – Input
 with st.sidebar:
     st.header("🧬 Sequence Input")
     uploaded = st.file_uploader("Upload .fasta", type=["fasta", "fa", "txt"])
@@ -54,13 +55,12 @@ with st.sidebar:
         st.success("Gemini API initialized!")
 
 for k in (
-    "df_guides", "offtargets", "guide_scores", "selected_gRNA", "selected_edit",
+    "df_guides", "offtargets", "selected_gRNA", "selected_edit",
     "sim_result", "sim_indel", "protein_domains", "offtarget_counts", "domain_penalties",
     "gemini_summary"
 ):
     st.session_state.setdefault(k, None)
 
-# gRNA search
 if st.button("🔍 Find gRNAs"):
     ok, seq_or_msg = validate_sequence(dna_seq)
     if not ok:
@@ -77,7 +77,7 @@ if st.button("🔍 Find gRNAs"):
             st.session_state.offtarget_counts = {}
             st.session_state.domain_penalties = {}
 
-            # --- OFF-TARGET
+            # --- Off-target
             if bg_seq and len(bg_seq.strip()) >= guide_len + 3:
                 off_targets_df = find_off_targets_detailed(guides, bg_seq, max_mm)
                 st.session_state.offtargets = off_targets_df
@@ -88,7 +88,7 @@ if st.button("🔍 Find gRNAs"):
             else:
                 st.session_state.offtargets = None
 
-            # --- PROTEIN DOMAIN PENALTY (HMMER, local)
+            # --- Protein domain penalty (HMMER local)
             domain_df = None
             if len(guides) > 0:
                 domain_df = annotate_protein_domains(seq_or_msg)
@@ -103,7 +103,7 @@ if st.button("🔍 Find gRNAs"):
                     guides.at[idx, "DomainPenalty"] = domain_penalty
                     st.session_state.domain_penalties[row["gRNA"]] = domain_penalty
 
-            # --- TRUE GUIDE SCORING: Hybrid + ML + Penalties
+            # --- True scoring: hybrid + ML + repair
             for idx, row in guides.iterrows():
                 guides.at[idx, "MLScore"] = ml_gRNA_score(row["gRNA"])
                 guides.at[idx, "HybridScore"] = hybrid_score(
@@ -111,12 +111,11 @@ if st.button("🔍 Find gRNAs"):
                     off_target_count=row["OffTargetCount"],
                     domain_penalty=row["DomainPenalty"]
                 )
-                # --- REPAIR LOGIC
                 cut_pos = row["Start"] + edit_offset
                 guides.at[idx, "HDRType"] = predict_hdr_repair(dna_seq, cut_pos)
             st.session_state.df_guides = guides
         st.session_state.update(
-            guide_scores=None, sim_result=None, sim_indel=None, gemini_summary=None,
+            sim_result=None, sim_indel=None, gemini_summary=None,
         )
 
 df = st.session_state.df_guides
@@ -196,7 +195,6 @@ with tab_sim:
     if st.session_state.protein_domains is not None:
         st.subheader("Protein Domain Annotation (local, real)")
         st.dataframe(st.session_state.protein_domains)
-        # Show domain/cut viz
         if not st.session_state.protein_domains.empty:
             cut_aa = idx // 3 if idx else 0
             fig = plot_protein_domains(
@@ -229,8 +227,7 @@ with tab_rank:
 
 with tab_gemini:
     st.header("Gemini AI Summary – Smart Project Insights")
-    if st.button("Get Gemini AI Summary"):
-        # Build rich context
+    if st.button("Get Gemini AI Summary") and genai is not None and gemini_key:
         gRNA = st.session_state.selected_gRNA
         guide_row = df[df["gRNA"] == gRNA].iloc[0]
         sim_result = st.session_state.sim_result
