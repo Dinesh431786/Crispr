@@ -187,19 +187,25 @@ Premature Stop Codon: {'Yes' if stop else 'No'}
         ai_button = st.button("Ask AI", key="ask_ai_button")
 
         if ai_button:
-            if st.session_state.ai_backend == "Gemini":
+            api_key = st.session_state.api_key
+            st.write("DEBUG: API KEY = ", api_key)  # Remove after debug
+            if not api_key or len(api_key.strip()) < 10:
+                st.session_state.ai_response = "No API key provided! Please enter your Gemini/OpenAI API key in the sidebar."
+            elif st.session_state.ai_backend == "Gemini":
                 try:
                     import google.generativeai as genai
-                    genai.configure(api_key=st.session_state.api_key)
+                    genai.configure(api_key=api_key)
                     model = genai.GenerativeModel('gemini-pro')
                     response = model.generate_content(gene_info)
                     st.session_state.ai_response = response.text
                 except Exception as e:
-                    st.session_state.ai_response = f"Error calling Gemini API: {e}"
+                    import traceback
+                    tb = traceback.format_exc()
+                    st.session_state.ai_response = f"Error calling Gemini API: {e}\nTraceback: {tb}"
             elif st.session_state.ai_backend == "OpenAI":
                 try:
                     import openai
-                    openai.api_key = st.session_state.api_key
+                    openai.api_key = api_key
                     response = openai.ChatCompletion.create(
                         model="gpt-3.5-turbo",
                         messages=[
@@ -209,7 +215,9 @@ Premature Stop Codon: {'Yes' if stop else 'No'}
                     )
                     st.session_state.ai_response = response.choices[0].message.content
                 except Exception as e:
-                    st.session_state.ai_response = f"Error calling OpenAI API: {e}"
+                    import traceback
+                    tb = traceback.format_exc()
+                    st.session_state.ai_response = f"Error calling OpenAI API: {e}\nTraceback: {tb}"
 
         if st.session_state.ai_response:
             st.info(st.session_state.ai_response)
