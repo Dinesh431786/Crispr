@@ -15,6 +15,17 @@ from analysis import (
 )
 import analysis
 
+SCORE_SUMMARY = """
+#### Understanding the Scores
+
+| Score Name    | What It Means                                                | Range      | How to Use                            |
+|---------------|-------------------------------------------------------------|------------|---------------------------------------|
+| Hybrid Score  | Lab-rule score: GC%, homopolymers, seed region, off-targets | 0.0–1.0    | Higher is better. Aim for >0.85       |
+| ML Score      | Data-driven (AI/ML): Patterns from large CRISPR screens     | 0.0–1.0    | Higher is better. Aim for >0.7        |
+
+**Best gRNAs score high in both! If in doubt, use guides that are high in both columns.**
+"""
+
 SCORE_EXPLAIN = """
 **Hybrid Score:**  
 - Practical laboratory rule-based score, range: **0.0 (poor) to 1.0 (ideal)**
@@ -31,6 +42,8 @@ SCORE_EXPLAIN = """
 
 st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
 st.title("🧬 CRISPR Lab NextGen – gRNA Designer & Impact Analyzer")
+
+st.markdown(SCORE_SUMMARY)
 st.markdown(SCORE_EXPLAIN)
 
 # ---- Sidebar ----
@@ -131,9 +144,11 @@ st.download_button("⬇️ Download gRNAs CSV", df.to_csv(index=False), "guides.
 # ---- ONE CLICK GEMINI REPORT ----
 st.markdown("---")
 st.header("📄 One Click Gemini Report")
+st.markdown(SCORE_SUMMARY)
 
 def build_gemini_prompt():
     context_parts = [
+        SCORE_SUMMARY,
         "### Hybrid and ML Score Logic\n",
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
@@ -193,6 +208,7 @@ if st.button("📄 Generate Gemini Report"):
             st.session_state.gemini_report = "API error:\n" + traceback.format_exc(limit=2)
 
 if st.session_state.gemini_report:
+    st.markdown(SCORE_SUMMARY)
     st.subheader("Gemini AI Report")
     st.info(st.session_state.gemini_report)
 
@@ -288,6 +304,7 @@ with tab_sim:
 with tab_ai:
     st.header("AI Explain (Gemini / OpenAI)")
     context_parts = [
+        SCORE_SUMMARY,
         "### Hybrid and ML Score Logic\n",
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
@@ -352,6 +369,7 @@ with tab_ai:
                 import traceback
                 st.session_state.ai_response = "API error:\n" + traceback.format_exc(limit=2)
     if st.session_state.ai_response:
+        st.markdown(SCORE_SUMMARY)
         st.info(st.session_state.ai_response)
 
 with tab_vis:
