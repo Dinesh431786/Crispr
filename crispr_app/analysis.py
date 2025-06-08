@@ -95,7 +95,10 @@ def safe_translate(seq):
     extra = len(seq) % 3
     if extra != 0:
         seq += "N" * (3 - extra)
-    return str(Seq(seq).translate(to_stop=True))
+    try:
+        return str(Seq(seq).translate(to_stop=True))
+    except Exception:
+        return "Translation failed (invalid codon)"
 
 def simulate_protein_edit(seq, cut_index, edit_type="del1", insert_base="A", sub_from="A", sub_to="T"):
     seq = seq.upper().replace('\n', '').replace(' ', '')
