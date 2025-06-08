@@ -1,4 +1,3 @@
-import shutil
 from Bio import SeqIO
 from dna_features_viewer import GraphicFeature, GraphicRecord
 
