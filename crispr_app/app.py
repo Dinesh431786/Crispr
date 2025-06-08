@@ -19,31 +19,28 @@ from analysis import (
 SCORE_SUMMARY = """
 #### Understanding the Scores
 
-| Score Name      | What It Means                                                | Range      | How to Use                            |
-|-----------------|-------------------------------------------------------------|------------|---------------------------------------|
-| Hybrid Score    | Lab-rule score: GC%, homopolymers, seed region, off-targets | 0.0–1.0    | Higher is better. Aim for >0.85       |
-| ML Score        | Data-driven (AI/ML): Patterns from large CRISPR screens     | 0.0–1.0    | Higher is better. Aim for >0.7        |
-| Consensus Score | The average of Hybrid & ML for balanced ranking             | 0.0–1.0    | Highest values are most reliable      |
+| Score Name      | What It Means                                                | Range      | How to Use                                              |
+|-----------------|-------------------------------------------------------------|------------|---------------------------------------------------------|
+| Hybrid Score    | Lab-rule score: GC%, homopolymers, seed region, off-targets | 0.0–1.0    | **Excellent:** >0.85, **Recommended:** >0.8             |
+| ML Score        | Data-driven (AI/ML): Patterns from large CRISPR screens     | 0.0–1.0    | **Excellent:** >0.7, **Recommended:** >0.65             |
+| Consensus Score | Average of Hybrid & ML for balanced ranking                 | 0.0–1.0    | **Excellent:** >0.85, **Recommended:** >0.8             |
 
-**Best gRNAs score high in all three!**
+**Aim for Consensus Score >0.85 (“Excellent”). Guides >0.8 are also “Recommended”. Lower scores may work but are not ideal.**
 """
 
 SCORE_EXPLAIN = """
 **Hybrid Score:**  
-Practical laboratory rule-based score, range: **0.0 (poor) to 1.0 (ideal)**  
-Considers GC%, homopolymer runs, seed region, off-target count, and terminal base.  
-**Interpretation:** Higher = more reliable guide for most experiments.
+Calculated by laboratory rule-based factors (GC%, homopolymers, seed region, off-target count, terminal base).  
+Range: 0.0 (poor) to 1.0 (excellent). Higher = more reliable guide.
 
 **ML Score:**  
-Machine-learning inspired meta-score (**0.0–1.0**).  
-Based on published patterns in large gRNA screens (GC%, homopolymers, seed, position, etc).  
-**Interpretation:** Higher = more likely to work according to CRISPR data trends.
+Based on large published CRISPR screen data using AI/ML patterns (GC%, homopolymers, seed, position, etc).  
+Range: 0.0 (poor) to 1.0 (excellent). Higher = more likely to work in practice.
 
 **Consensus Score:**  
-Combines the Hybrid Score and ML Score into a single metric by averaging them:  Consensus Score = (Hybrid Score + ML Score)
-
-This provides a balanced view, giving equal importance to laboratory rules and machine-learning predictions.  
-**Interpretation:** Use guides with the highest Consensus Scores for best results!
+Consensus Score = (Hybrid Score + ML Score) / 2  
+Averages both lab rules and ML predictions for a balanced rank.  
+Higher = best chance of experimental success.
 """
 
 st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
@@ -144,12 +141,11 @@ st.download_button("⬇️ Download gRNAs CSV", df.to_csv(index=False), "guides.
 
 st.markdown("---")
 st.header("📄 One Click Gemini Report")
-st.markdown(SCORE_SUMMARY)
 
 def build_gemini_prompt():
     context_parts = [
         SCORE_SUMMARY,
-        "### Hybrid and ML Score Logic\n",
+        "### Score Logic Explanation (for AI only)\n",
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
         df[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
@@ -304,7 +300,7 @@ with tab_ai:
     st.header("AI Explain (Gemini / OpenAI)")
     context_parts = [
         SCORE_SUMMARY,
-        "### Hybrid and ML Score Logic\n",
+        "### Score Logic Explanation (for AI only)\n",
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
         df[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
@@ -394,4 +390,3 @@ with tab_rank:
         st.dataframe(rank_df, use_container_width=True)
     else:
         st.info("Run off-target scan to get specificity ranking.")
-
