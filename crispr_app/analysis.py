@@ -7,12 +7,13 @@ def score_guide(guide):
     score = 1.0
     if gc < 0.4 or gc > 0.7:
         score -= 0.25
-    if "TTTT" in guide or "GGGG" in guide:
+    if "TTTT" in guide or "GGGG" in guide or "AAAA" in guide or "CCCC" in guide:
         score -= 0.2
     if guide[-1] == "G":
         score += 0.1
     if guide[0] == "T":
         score -= 0.1
+    # Optionally penalize/reward seed sequence composition, secondary structure, etc.
     return round(max(score, 0.0), 2)
 
 def check_pam(pam_seq, pam):
@@ -42,6 +43,7 @@ def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70):
                     "GC%": round(gc,2),
                     "ActivityScore": score_guide(guide)
                 })
+    # Now reverse complement
     rc_sequence = str(Seq(sequence).reverse_complement())
     for i in range(len(rc_sequence) - guide_length - pam_len + 1):
         guide = rc_sequence[i:i+guide_length]
@@ -79,7 +81,7 @@ def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
             "OffTargetCount": len(details),
             "Details": details
         })
-    # Flatten to a detailed dataframe for Streamlit
+    # Flatten for Streamlit
     flat = []
     for result in results:
         for detail in result["Details"]:
