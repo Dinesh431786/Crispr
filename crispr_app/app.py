@@ -12,34 +12,38 @@ from analysis import (
     diff_proteins,
     indel_simulations,
     predict_hdr_repair,
+    hybrid_score,
+    ml_gRNA_score,
 )
-import analysis
 
 SCORE_SUMMARY = """
 #### Understanding the Scores
 
-| Score Name    | What It Means                                                | Range      | How to Use                            |
-|---------------|-------------------------------------------------------------|------------|---------------------------------------|
-| Hybrid Score  | Lab-rule score: GC%, homopolymers, seed region, off-targets | 0.0–1.0    | Higher is better. Aim for >0.85       |
-| ML Score      | Data-driven (AI/ML): Patterns from large CRISPR screens     | 0.0–1.0    | Higher is better. Aim for >0.7        |
+| Score Name      | What It Means                                                | Range      | How to Use                            |
+|-----------------|-------------------------------------------------------------|------------|---------------------------------------|
+| Hybrid Score    | Lab-rule score: GC%, homopolymers, seed region, off-targets | 0.0–1.0    | Higher is better. Aim for >0.85       |
+| ML Score        | Data-driven (AI/ML): Patterns from large CRISPR screens     | 0.0–1.0    | Higher is better. Aim for >0.7        |
 | Consensus Score | The average of Hybrid & ML for balanced ranking             | 0.0–1.0    | Highest values are most reliable      |
 
-
-**Best gRNAs score high in both! If in doubt, use guides that are high in both columns.**
+**Best gRNAs score high in all three!**
 """
 
 SCORE_EXPLAIN = """
 **Hybrid Score:**  
-* Practical laboratory rule-based score, range: **0.0 (poor) to 1.0 (ideal)**
-* Considers GC%, homopolymer runs, seed region, off-target count, and terminal base.
-* **Interpretation:** Higher = more reliable guide for most experiments.
+Practical laboratory rule-based score, range: **0.0 (poor) to 1.0 (ideal)**  
+Considers GC%, homopolymer runs, seed region, off-target count, and terminal base.  
+**Interpretation:** Higher = more reliable guide for most experiments.
 
 **ML Score:**  
-* Machine-learning inspired meta-score (0.0–1.0).
-* Based on published patterns in large gRNA screens (GC%, homopolymers, seed, position, etc).
-* **Interpretation:** Higher = more likely to work according to CRISPR data trends.
+Machine-learning inspired meta-score (**0.0–1.0**).  
+Based on published patterns in large gRNA screens (GC%, homopolymers, seed, position, etc).  
+**Interpretation:** Higher = more likely to work according to CRISPR data trends.
 
-**If in doubt, choose guides that score high on BOTH.**
+**Consensus Score:**  
+Combines the Hybrid Score and ML Score into a single metric by averaging them:Consensus Score = (Hybrid Score + ML Score)
+
+This provides a balanced view, giving equal importance to laboratory rules and machine-learning predictions.  
+**Interpretation:** Use guides with the highest Consensus Scores for best results!
 """
 
 st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
@@ -81,7 +85,6 @@ with st.sidebar:
         help="Cas9 cut ≈ 3 bp upstream of PAM; set as needed.",
     )
 
-    # ---- AI Settings (ALWAYS in sidebar) ----
     st.header("🤖 AI Explain Settings")
     ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend_sidebar")
     gemini_model = "gemini-1.5-flash-latest"
@@ -135,9 +138,10 @@ if df is None or df.empty:
     st.stop()
 
 # ---- Add scores columns ----
-if "HybridScore" not in df.columns or "MLScore" not in df.columns:
-    df["HybridScore"] = [analysis.hybrid_score(g) for g in df.gRNA]
-    df["MLScore"] = [analysis.ml_gRNA_score(g) for g in df.gRNA]
+if "HybridScore" not in df.columns or "MLScore" not in df.columns or "ConsensusScore" not in df.columns:
+    df["HybridScore"] = [hybrid_score(g) for g in df.gRNA]
+    df["MLScore"] = [ml_gRNA_score(g) for g in df.gRNA]
+    df["ConsensusScore"] = (df["HybridScore"] + df["MLScore"]) / 2
 
 st.success(f"✅ {len(df)} gRNAs found")
 st.dataframe(df, use_container_width=True)
@@ -154,7 +158,7 @@ def build_gemini_prompt():
         "### Hybrid and ML Score Logic\n",
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
-        df[["gRNA", "HybridScore", "MLScore"]].head(10).to_csv(sep="|", index=False),
+        df[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
     ]
     ot_df = st.session_state.offtargets
     if ot_df is not None and not ot_df.empty:
@@ -310,7 +314,7 @@ with tab_ai:
         "### Hybrid and ML Score Logic\n",
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
-        df[["gRNA", "HybridScore", "MLScore"]].head(10).to_csv(sep="|", index=False),
+        df[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
     ]
     ot_df = st.session_state.offtargets
     if ot_df is not None and not ot_df.empty:
@@ -397,3 +401,4 @@ with tab_rank:
         st.dataframe(rank_df, use_container_width=True)
     else:
         st.info("Run off-target scan to get specificity ranking.")
+
