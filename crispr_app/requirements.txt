@@ -1,0 +1,7 @@
+streamlit
+biopython
+dna-features-viewer
+pandas
+google-generativeai
+openai
+guidemaker
