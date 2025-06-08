@@ -209,14 +209,45 @@ with tab_sim:
         st.dataframe(st.session_state.sim_indel, use_container_width=True)
 
 # ────────────────────────────────
-# AI Explain tab
+# AI Explain tab (advanced auto-context)
 # ────────────────────────────────
 with tab_ai:
-    ctx = st.text_area(
-        "Describe the edit context",
-        f"Editing at {st.session_state.selected_gRNA}",
-        key="ai_ctx",
+    # Gather all relevant context
+    selected_gRNA = st.session_state.get("selected_gRNA", "")
+    specificity = (
+        st.session_state.guide_scores.get(selected_gRNA)
+        if st.session_state.guide_scores and selected_gRNA else None
     )
+    edit_type = st.session_state.get("selected_edit", "")
+    sim_result = st.session_state.get("sim_result")
+    dna_excerpt = dna_seq  # or slice with the gRNA for compactness
+
+    # Build smart prompt
+    context_lines = []
+    if selected_gRNA:
+        context_lines.append(
+            f"I have designed a CRISPR gRNA ({selected_gRNA}) in the following DNA sequence:"
+        )
+        context_lines.append(dna_excerpt)
+    if specificity is not None:
+        context_lines.append(f"The specificity score is {specificity}.")
+    if edit_type:
+        context_lines.append(f"Planned edit type: {edit_type}.")
+    if sim_result:
+        before, after, fs, stop = sim_result
+        context_lines.append(f"Protein before: {before}")
+        context_lines.append(f"Protein after: {after}")
+        context_lines.append(f"Frameshift: {fs} | Premature stop: {stop}")
+    context_lines.append("What is the likely biological effect and are there any CRISPR risks or off-target concerns?")
+
+    default_ctx = "\n".join(context_lines) if context_lines else "Describe your CRISPR edit context here."
+
+    ctx = st.text_area(
+        "Describe the edit context (auto-filled, you can edit):",
+        value=default_ctx,
+        key="ai_ctx"
+    )
+
     if st.button("Ask AI"):
         key = st.session_state.get("api_key")
         if not key or len(key.strip()) < 10:
