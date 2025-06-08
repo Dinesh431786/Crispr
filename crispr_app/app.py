@@ -26,6 +26,16 @@ SCORE_SUMMARY = """
 **Best gRNAs score high in both! If in doubt, use guides that are high in both columns.**
 """
 
+SCORE_EXPLAIN = """
+**Hybrid Score:**  
+* Practical laboratory rule-based score, range: **0.0 (poor) to 1.0 (ideal)**
+* Considers GC%, homopolymer runs, seed region, off-target count, and terminal base.
+* **Interpretation:** Higher = more reliable guide for most experiments.
+
+**ML Score:**  
+* Machine-learning inspired meta-score (0.0–1.0).
+* Based on published patterns in large gRNA screens (GC%, homopolymers, seed, position, etc).
+* **Interpretation:** Higher = more likely to work according to CRISPR data trends.
 
 **If in doubt, choose guides that score high on BOTH.**
 """
