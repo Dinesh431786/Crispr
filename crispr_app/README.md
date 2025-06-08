@@ -51,7 +51,7 @@ See the app for detailed explanations of each score.
 bash
 Copy
 Edit
-git clone https://github.com/yourusername/crispr-guide-designer.git
+git clone https://github.com/Dinesh431786/Crispr/edit/main/crispr_app
 cd crispr-guide-designer
 pip install -r requirements.txt
 streamlit run app.py
