@@ -2,7 +2,7 @@ from Bio.Seq import Seq
 from difflib import Differ
 import pandas as pd
 
-def hybrid_score(guide, off_target_count=0, domain_penalty=0):
+def hybrid_score(guide, off_target_count=0):
     """
     Hybrid scoring logic:
     - Starts at 1.0
@@ -11,7 +11,6 @@ def hybrid_score(guide, off_target_count=0, domain_penalty=0):
     - Penalty for T/A-rich seed (last 4 bases)
     - Bonus for terminal G
     - Penalty for off-targets
-    - Penalty for domain (always zero here)
     """
     gc = (guide.count('G') + guide.count('C')) / len(guide)
     seed = guide[-4:]
@@ -25,7 +24,6 @@ def hybrid_score(guide, off_target_count=0, domain_penalty=0):
     if guide[-1] == "G":
         score += 0.05
     score -= 0.05 * off_target_count
-    score -= 0.2 * domain_penalty  # Always zero
     return round(max(score, 0.0), 3)
 
 def ml_gRNA_score(guide):
@@ -199,10 +197,6 @@ def indel_simulations(seq, cut_index):
             "Frameshift": ins_fs
         })
     return pd.DataFrame(results)
-
-def annotate_protein_domains(seq):
-    # Returns empty DataFrame to keep app logic happy
-    return pd.DataFrame(columns=["Domain", "StartAA", "EndAA", "Evalue"])
 
 def predict_hdr_repair(seq, cut_pos):
     if cut_pos >= len(seq) - 1:
