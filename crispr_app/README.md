@@ -6,37 +6,24 @@ A fast, user-friendly web app for designing, scoring, and analyzing CRISPR guide
 
 🎯 Unique Features & USP
 Simple: Paste a DNA sequence or upload a FASTA file—no coding or setup required.
-
 Smart Scoring: Each guide is scored with both lab rules and data-inspired heuristics (Hybrid, ML, and Consensus scores).
-
 Off-Target Awareness: Scan your custom background DNA for potential off-targets.
-
 AI Summary: One-click Gemini/OpenAI-powered guide report.
-
 Free & Open Source: Use, share, or modify—no restrictions.
 
 👥 Who is this for? (ICP)
 Molecular biology, plant, and biomedical researchers.
-
 Academic labs and teaching settings.
-
 Biotech startups and R&D teams.
-
 Students, beginners, and DIY bio enthusiasts.
 
 🛠️ How to Use
 Open the Streamlit app.
-
 Paste your DNA sequence or upload a FASTA file.
-
 Set CRISPR/PAM parameters as needed.
-
 Click Find gRNAs to view candidate guides.
-
 Review scores and download your results.
-
 (Optional) Provide background DNA to scan for off-targets.
-
 (Optional) Simulate edits or request an AI-powered summary.
 
 📊 How are scores calculated?
