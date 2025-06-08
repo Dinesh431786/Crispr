@@ -16,6 +16,7 @@ from analysis import (
     ml_gRNA_score,
     predict_hdr_repair,
     annotate_protein_domains,
+    safe_translate
 )
 import datetime
 
@@ -77,7 +78,6 @@ if st.button("🔍 Find gRNAs"):
             st.session_state.offtarget_counts = {}
             st.session_state.domain_penalties = {}
 
-            # --- Off-target
             if bg_seq and len(bg_seq.strip()) >= guide_len + 3:
                 off_targets_df = find_off_targets_detailed(guides, bg_seq, max_mm)
                 st.session_state.offtargets = off_targets_df
@@ -88,7 +88,6 @@ if st.button("🔍 Find gRNAs"):
             else:
                 st.session_state.offtargets = None
 
-            # --- Protein domain penalty (HMMER local)
             domain_df = None
             if len(guides) > 0:
                 domain_df = annotate_protein_domains(seq_or_msg)
@@ -103,7 +102,6 @@ if st.button("🔍 Find gRNAs"):
                     guides.at[idx, "DomainPenalty"] = domain_penalty
                     st.session_state.domain_penalties[row["gRNA"]] = domain_penalty
 
-            # --- True scoring: hybrid + ML + repair
             for idx, row in guides.iterrows():
                 guides.at[idx, "MLScore"] = ml_gRNA_score(row["gRNA"])
                 guides.at[idx, "HybridScore"] = hybrid_score(
@@ -153,6 +151,7 @@ EDIT_TYPES = {
     "Insert G": "insG",
     "Substitute A→T": "subAG",
 }
+
 with tab_sim:
     g_list = df.gRNA.tolist()
     st.session_state.selected_gRNA = st.selectbox("gRNA", g_list, key="sel_gRNA")
@@ -165,8 +164,9 @@ with tab_sim:
         sub_from = st.text_input("Sub FROM", "A")
         sub_to = st.text_input("Sub TO", "T")
 
+    idx = dna_seq.upper().find(st.session_state.selected_gRNA)
+
     if st.button("Simulate"):
-        idx = dna_seq.upper().find(st.session_state.selected_gRNA)
         if idx == -1:
             st.error("gRNA not found in sequence!")
         else:
@@ -182,6 +182,7 @@ with tab_sim:
             )
             st.session_state.protein_domains = annotate_protein_domains(dna_seq)
 
+    # --- Display Simulation Results
     if st.session_state.sim_result:
         before, after, fs, stop = st.session_state.sim_result
         st.markdown(f"**Before protein:** `{before}`")
@@ -192,15 +193,20 @@ with tab_sim:
     if st.session_state.sim_indel is not None:
         st.subheader("±1–3 bp indel simulation")
         st.dataframe(st.session_state.sim_indel, use_container_width=True)
-    if st.session_state.protein_domains is not None:
+    
+    # --- Always plot protein domains (robust, never fails)
+    if st.session_state.protein_domains is not None and not st.session_state.protein_domains.empty:
         st.subheader("Protein Domain Annotation (local, real)")
         st.dataframe(st.session_state.protein_domains)
-        if not st.session_state.protein_domains.empty:
-            cut_aa = idx // 3 if idx else 0
-            fig = plot_protein_domains(
-                before, st.session_state.protein_domains, cut_aa
-            )
-            st.plotly_chart(fig, use_container_width=True)
+        cut_aa = idx // 3 if idx is not None and idx >= 0 else 0
+        if st.session_state.sim_result:
+            protein_for_plot = before
+        else:
+            protein_for_plot = safe_translate(dna_seq)
+        fig = plot_protein_domains(
+            protein_for_plot, st.session_state.protein_domains, cut_aa
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
 with tab_vis:
     idx = dna_seq.upper().find(st.session_state.selected_gRNA)
