@@ -15,9 +15,6 @@ from analysis import (
 )
 import analysis
 
-# ──────────────────────────────────────────────
-# Score Explanations
-# ──────────────────────────────────────────────
 SCORE_EXPLAIN = """
 **Hybrid Score:**  
 - Practical laboratory rule-based score, range: **0.0 (poor) to 1.0 (ideal)**
@@ -36,9 +33,7 @@ st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
 st.title("🧬 CRISPR Lab NextGen – gRNA Designer & Impact Analyzer")
 st.markdown(SCORE_EXPLAIN)
 
-# ──────────────────────────────────────────────
-# Sidebar – sequence & AI settings
-# ──────────────────────────────────────────────
+# Sidebar
 with st.sidebar:
     st.header("🧬 Sequence Input")
     uploaded = st.file_uploader("Upload .fasta", type=["fasta", "fa", "txt"])
@@ -71,9 +66,7 @@ with st.sidebar:
         help="Cas9 cut ≈ 3 bp upstream of PAM; set as needed.",
     )
 
-# ──────────────────────────────────────────────
-# Initialise session-state holders
-# ──────────────────────────────────────────────
+# Session state holders
 for k in (
     "df_guides",
     "offtargets",
@@ -86,9 +79,7 @@ for k in (
 ):
     st.session_state.setdefault(k, None)
 
-# ──────────────────────────────────────────────
 # gRNA search
-# ──────────────────────────────────────────────
 if st.button("🔍 Find gRNAs"):
     ok, msg = validate_sequence(dna_seq)
     if not ok:
@@ -99,7 +90,6 @@ if st.button("🔍 Find gRNAs"):
             st.session_state.df_guides = find_gRNAs(
                 dna_seq, pam, guide_len, min_gc, max_gc
             )
-        # reset downstream state
         st.session_state.update(
             offtargets=None,
             guide_scores=None,
@@ -113,9 +103,7 @@ if df is None or df.empty:
     st.info("Paste DNA & click **Find gRNAs** to begin.")
     st.stop()
 
-# ──────────────────────────────────────────────
 # Add scores columns
-# ──────────────────────────────────────────────
 if "HybridScore" not in df.columns or "MLScore" not in df.columns:
     df["HybridScore"] = [analysis.hybrid_score(g) for g in df.gRNA]
     df["MLScore"] = [analysis.ml_gRNA_score(g) for g in df.gRNA]
@@ -128,9 +116,7 @@ tab_ot, tab_sim, tab_ai, tab_vis, tab_rank = st.tabs(
     ["Off-targets", "Simulation & Indel", "AI Explain", "Visualization", "Ranking"]
 )
 
-# ──────────────────────────────────────────────
 # Off-target tab
-# ──────────────────────────────────────────────
 with tab_ot:
     if not bg_seq.strip():
         st.info("Provide background DNA in sidebar for off-target scanning.")
@@ -139,7 +125,6 @@ with tab_ot:
             st.session_state.offtargets = find_off_targets_detailed(
                 df, bg_seq, max_mm
             )
-            # simple specificity score
             scores = {
                 g: round(
                     1.0
@@ -170,9 +155,7 @@ with tab_ot:
                     "offtargets.csv",
                 )
 
-# ──────────────────────────────────────────────
 # Simulation & Indel tab
-# ──────────────────────────────────────────────
 with tab_sim:
     g_list = df.gRNA.tolist()
     st.session_state.selected_gRNA = st.selectbox(
@@ -188,8 +171,6 @@ with tab_sim:
     st.session_state.selected_edit = st.selectbox(
         "Edit type", list(EDIT_TYPES), key="sel_edit"
     )
-
-    # extra fields for substitution
     sub_from = sub_to = ""
     if EDIT_TYPES[st.session_state.selected_edit] == "subAG":
         sub_from = st.text_input("Sub FROM", "A")
@@ -221,17 +202,45 @@ with tab_sim:
         st.subheader("±1–3 bp indel simulation")
         st.dataframe(st.session_state.sim_indel, use_container_width=True)
 
-# ──────────────────────────────────────────────
-# AI Explain tab (Gemini/OpenAI)
-# ──────────────────────────────────────────────
+# AI Explain tab (with full context to Gemini/OpenAI, now Gemini model select)
 with tab_ai:
     st.header("AI Explain (Gemini / OpenAI)")
-    ctx = st.text_area(
-        "Describe the edit context",
-        f"Editing at {st.session_state.selected_gRNA if st.session_state.selected_gRNA else 'your gRNA'}",
-        key="ai_ctx",
+    # Build auto-context for the AI prompt
+    context_parts = [
+        "### Hybrid and ML Score Logic\n",
+        SCORE_EXPLAIN,
+        "\n\n### gRNA Candidates Table (top 10 shown)\n",
+        df[["gRNA", "HybridScore", "MLScore"]].head(10).to_markdown(index=False),
+    ]
+    # Off-targets summary
+    ot_df = st.session_state.offtargets
+    if ot_df is not None and not ot_df.empty:
+        off_target_summary = ot_df.groupby("gRNA")["Mismatches"].count().reset_index()
+        context_parts.append("\n\n### Off-target Summary\n")
+        context_parts.append(off_target_summary.to_markdown(index=False))
+    # Simulation results
+    sim_res = st.session_state.sim_result
+    if sim_res:
+        before, after, fs, stop = sim_res
+        context_parts.append("\n\n### Simulation Result\n")
+        context_parts.append(f"**Before protein:** `{before}`\n")
+        context_parts.append(f"**After protein:** `{after}`\n")
+        context_parts.append(f"Frameshift: {fs} | Premature stop: {stop}\n")
+    context_str = "\n".join(context_parts)
+    user_notes = st.text_area(
+        "Add any specific questions or notes for AI (optional):", 
+        "", 
+        key="ai_notes"
     )
+    full_prompt = context_str + "\n\n" + user_notes.strip()
     ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend")
+    gemini_model = "gemini-1.5-flash-latest"
+    if ai_backend == "Gemini":
+        gemini_model = st.selectbox(
+            "Gemini Model",
+            ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest"],
+            key="gemini_model",
+        )
     api_key = st.text_input("API Key", type="password", key="api_key")
     if st.button("Ask AI"):
         if not api_key or len(api_key.strip()) < 10:
@@ -241,8 +250,8 @@ with tab_ai:
                 if ai_backend == "Gemini":
                     import google.generativeai as genai
                     genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel("gemini-1.5-pro-latest")
-                    result = model.generate_content(ctx)
+                    model = genai.GenerativeModel(gemini_model)
+                    result = model.generate_content(full_prompt)
                     st.session_state.ai_response = result.text if hasattr(result, "text") else str(result)
                 else:
                     import openai
@@ -251,7 +260,7 @@ with tab_ai:
                         model="gpt-3.5-turbo",
                         messages=[
                             {"role": "system", "content": "You are a CRISPR genome editing expert."},
-                            {"role": "user", "content": ctx},
+                            {"role": "user", "content": full_prompt},
                         ],
                     )
                     st.session_state.ai_response = resp.choices[0].message.content
@@ -261,9 +270,7 @@ with tab_ai:
     if st.session_state.ai_response:
         st.info(st.session_state.ai_response)
 
-# ──────────────────────────────────────────────
 # Visualization tab
-# ──────────────────────────────────────────────
 with tab_vis:
     idx = dna_seq.upper().find(st.session_state.selected_gRNA)
     if idx != -1:
@@ -272,9 +279,7 @@ with tab_vis:
     else:
         st.info("gRNA not found for visualization.")
 
-# ──────────────────────────────────────────────
 # Ranking tab
-# ──────────────────────────────────────────────
 with tab_rank:
     if st.session_state.guide_scores:
         rank_df = (
