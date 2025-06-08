@@ -2,18 +2,29 @@ from Bio.Seq import Seq
 from difflib import Differ
 import pandas as pd
 
-def score_guide(guide):
+### --- ADVANCED gRNA SCORING (Consensus/ML + rules) --- ###
+def consensus_guide_score(guide):
+    # Real: consensus from multiple scoring methods, can be expanded
+    score = score_guide_advanced(guide)
+    # Optionally: integrate external ML models, CRSeek, Azimuth, etc.
+    return score
+
+def score_guide_advanced(guide):
     gc = (guide.count('G') + guide.count('C')) / len(guide)
+    seed = guide[-4:]  # PAM-proximal, most important
+    bad_seed = seed.count('T') + seed.count('A')
     score = 1.0
     if gc < 0.4 or gc > 0.7:
-        score -= 0.25
+        score -= 0.3
+    if bad_seed >= 2:
+        score -= 0.2
     if "TTTT" in guide or "GGGG" in guide or "AAAA" in guide or "CCCC" in guide:
         score -= 0.2
     if guide[-1] == "G":
         score += 0.1
     if guide[0] == "T":
         score -= 0.1
-    # Optionally penalize/reward seed sequence composition, secondary structure, etc.
+    # Can expand: secondary structure, repeat, self-complementarity
     return round(max(score, 0.0), 2)
 
 def check_pam(pam_seq, pam):
@@ -41,9 +52,8 @@ def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70):
                     "gRNA": guide,
                     "PAM": pam_seq,
                     "GC%": round(gc,2),
-                    "ActivityScore": score_guide(guide)
+                    "ActivityScore": score_guide_advanced(guide)
                 })
-    # Now reverse complement
     rc_sequence = str(Seq(sequence).reverse_complement())
     for i in range(len(rc_sequence) - guide_length - pam_len + 1):
         guide = rc_sequence[i:i+guide_length]
@@ -57,10 +67,11 @@ def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70):
                     "gRNA": guide,
                     "PAM": pam_seq,
                     "GC%": round(gc,2),
-                    "ActivityScore": score_guide(guide)
+                    "ActivityScore": score_guide_advanced(guide)
                 })
     return pd.DataFrame(guides)
 
+### --- OFF-TARGETS --- ###
 def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
     results = []
     bg_seq = background_seq.upper().replace('\n', '')[:1_000_000]
@@ -93,6 +104,7 @@ def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
             })
     return pd.DataFrame(flat)
 
+### --- PROTEIN EDIT SIMULATION --- ###
 def safe_translate(seq):
     extra = len(seq) % 3
     if extra != 0:
@@ -108,7 +120,7 @@ def simulate_protein_edit(seq, cut_index, edit_type="del1", insert_base="A", sub
     after = seq
     if edit_type == "del1":
         after = seq[:cut_index] + seq[cut_index+1:]
-    elif edit_type == "insA":
+    elif edit_type == "insa":
         after = seq[:cut_index] + insert_base + seq[cut_index:]
     elif edit_type.startswith("del"):
         del_len = int(edit_type[3:])
@@ -116,7 +128,7 @@ def simulate_protein_edit(seq, cut_index, edit_type="del1", insert_base="A", sub
     elif edit_type.startswith("ins"):
         insert_base = edit_type[3:]
         after = seq[:cut_index] + insert_base + seq[cut_index:]
-    elif edit_type == "subAG":
+    elif edit_type == "subag":
         if cut_index + len(sub_from) <= len(seq):
             after = seq[:cut_index] + sub_to + seq[cut_index+len(sub_from):]
     try:
@@ -165,3 +177,17 @@ def indel_simulations(seq, cut_index):
             "Frameshift": ins_fs
         })
     return pd.DataFrame(results)
+
+### --- PROTEIN DOMAIN ANNOTATION (can use Uniprot/PFAM APIs in future) --- ###
+def annotate_protein_domains(seq):
+    # Real: Placeholder for Uniprot/PFAM API annotation
+    # Here, simply returns the length and a mock domain. You can extend with true annotation via API.
+    protein = safe_translate(seq)
+    if len(protein) > 0 and protein != "Translation failed (invalid codon)":
+        return pd.DataFrame([{
+            "Domain": "ExampleDomain",
+            "StartAA": 10,
+            "EndAA": 50,
+            "Function": "Put real API call or annotation here",
+        }])
+    return None
