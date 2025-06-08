@@ -1,31 +1,25 @@
 from Bio.Seq import Seq
 from difflib import Differ
 import pandas as pd
+import subprocess
+import os
 
-### --- ADVANCED gRNA SCORING (Consensus/ML + rules) --- ###
-def consensus_guide_score(guide):
-    # Real: consensus from multiple scoring methods, can be expanded
-    score = score_guide_advanced(guide)
-    # Optionally: integrate external ML models, CRSeek, Azimuth, etc.
-    return score
-
-def score_guide_advanced(guide):
+### --- HYBRID GUIDE SCORING (rule-based + domain/offtarget logic) --- ###
+def hybrid_score(guide, off_target_count=0, domain_penalty=0):
     gc = (guide.count('G') + guide.count('C')) / len(guide)
-    seed = guide[-4:]  # PAM-proximal, most important
-    bad_seed = seed.count('T') + seed.count('A')
+    seed = guide[-4:]
     score = 1.0
     if gc < 0.4 or gc > 0.7:
-        score -= 0.3
-    if bad_seed >= 2:
         score -= 0.2
-    if "TTTT" in guide or "GGGG" in guide or "AAAA" in guide or "CCCC" in guide:
-        score -= 0.2
-    if guide[-1] == "G":
-        score += 0.1
-    if guide[0] == "T":
+    if "TTTT" in guide or "GGGG" in guide:
         score -= 0.1
-    # Can expand: secondary structure, repeat, self-complementarity
-    return round(max(score, 0.0), 2)
+    if seed.count("T") + seed.count("A") > 2:
+        score -= 0.1
+    if guide[-1] == "G":
+        score += 0.05
+    score -= 0.05 * off_target_count  # penalty per off-target hit
+    score -= 0.2 * domain_penalty     # strong penalty if it disrupts a key domain
+    return round(max(score, 0.0), 3)
 
 def check_pam(pam_seq, pam):
     if pam == "NGG":
@@ -52,7 +46,6 @@ def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70):
                     "gRNA": guide,
                     "PAM": pam_seq,
                     "GC%": round(gc,2),
-                    "ActivityScore": score_guide_advanced(guide)
                 })
     rc_sequence = str(Seq(sequence).reverse_complement())
     for i in range(len(rc_sequence) - guide_length - pam_len + 1):
@@ -67,11 +60,10 @@ def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70):
                     "gRNA": guide,
                     "PAM": pam_seq,
                     "GC%": round(gc,2),
-                    "ActivityScore": score_guide_advanced(guide)
                 })
     return pd.DataFrame(guides)
 
-### --- OFF-TARGETS --- ###
+### --- OFF-TARGETS: Full exact search --- ###
 def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
     results = []
     bg_seq = background_seq.upper().replace('\n', '')[:1_000_000]
@@ -92,7 +84,7 @@ def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
             "OffTargetCount": len(details),
             "Details": details
         })
-    # Flatten for Streamlit
+    # Flatten for output
     flat = []
     for result in results:
         for detail in result["Details"]:
@@ -120,7 +112,7 @@ def simulate_protein_edit(seq, cut_index, edit_type="del1", insert_base="A", sub
     after = seq
     if edit_type == "del1":
         after = seq[:cut_index] + seq[cut_index+1:]
-    elif edit_type == "insa":
+    elif edit_type == "insA":
         after = seq[:cut_index] + insert_base + seq[cut_index:]
     elif edit_type.startswith("del"):
         del_len = int(edit_type[3:])
@@ -128,7 +120,7 @@ def simulate_protein_edit(seq, cut_index, edit_type="del1", insert_base="A", sub
     elif edit_type.startswith("ins"):
         insert_base = edit_type[3:]
         after = seq[:cut_index] + insert_base + seq[cut_index:]
-    elif edit_type == "subag":
+    elif edit_type == "subAG":
         if cut_index + len(sub_from) <= len(seq):
             after = seq[:cut_index] + sub_to + seq[cut_index+len(sub_from):]
     try:
@@ -155,10 +147,8 @@ def diff_proteins(before, after):
     return ''.join(result)
 
 def indel_simulations(seq, cut_index):
-    # Simulate −3, −2, −1, +1, +2, +3 edits
     results = []
     for n in [1,2,3]:
-        # Deletions
         del_seq = seq[:cut_index] + seq[cut_index+n:]
         del_prot = safe_translate(del_seq)
         del_fs = (len(del_seq)%3 != 0)
@@ -167,7 +157,6 @@ def indel_simulations(seq, cut_index):
             "Protein": del_prot,
             "Frameshift": del_fs
         })
-        # Insertions (A)
         ins_seq = seq[:cut_index] + ("A"*n) + seq[cut_index:]
         ins_prot = safe_translate(ins_seq)
         ins_fs = (len(ins_seq)%3 != 0)
@@ -178,16 +167,38 @@ def indel_simulations(seq, cut_index):
         })
     return pd.DataFrame(results)
 
-### --- PROTEIN DOMAIN ANNOTATION (can use Uniprot/PFAM APIs in future) --- ###
+### --- PROTEIN DOMAIN ANNOTATION USING LOCAL PFAM/HMMER --- ###
+def scan_protein_domains(protein_seq, pfam_db_path="Pfam-A.hmm"):
+    # Write protein to temp fasta
+    tmp_fa = "temp_prot.fa"
+    tmp_tbl = "temp_tbl.txt"
+    with open(tmp_fa, "w") as f:
+        f.write(">query\n" + protein_seq + "\n")
+    # Run hmmscan (assumes HMMER installed and pfam_db_path exists)
+    cmd = [
+        "hmmscan", "--tblout", tmp_tbl,
+        pfam_db_path, tmp_fa
+    ]
+    try:
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        domains = []
+        with open(tmp_tbl) as f:
+            for line in f:
+                if line.startswith("#"): continue
+                cols = line.strip().split()
+                if len(cols) > 18:
+                    domains.append({
+                        "Domain": cols[0],
+                        "StartAA": int(cols[17]),
+                        "EndAA": int(cols[18]),
+                        "Evalue": cols[6],
+                    })
+        os.remove(tmp_fa)
+        os.remove(tmp_tbl)
+        return pd.DataFrame(domains)
+    except Exception as e:
+        return pd.DataFrame([{"Domain": "ERROR", "StartAA": 0, "EndAA": 0, "Evalue": str(e)}])
+
 def annotate_protein_domains(seq):
-    # Real: Placeholder for Uniprot/PFAM API annotation
-    # Here, simply returns the length and a mock domain. You can extend with true annotation via API.
-    protein = safe_translate(seq)
-    if len(protein) > 0 and protein != "Translation failed (invalid codon)":
-        return pd.DataFrame([{
-            "Domain": "ExampleDomain",
-            "StartAA": 10,
-            "EndAA": 50,
-            "Function": "Put real API call or annotation here",
-        }])
-    return None
+    prot = safe_translate(seq)
+    return scan_protein_domains(prot)
