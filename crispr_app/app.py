@@ -1,250 +1,286 @@
 import streamlit as st
 import pandas as pd
-from utils import validate_sequence, load_fasta, visualize_guide_location
-from analysis import find_gRNAs, find_off_targets_detailed, simulate_protein_edit, diff_proteins, indel_simulations
+from utils import (
+    validate_sequence,
+    load_fasta,
+    visualize_guide_location,
+)
+from analysis import (
+    find_gRNAs,
+    find_off_targets_detailed,
+    simulate_protein_edit,
+    diff_proteins,
+    indel_simulations,
+)
 
+# ──────────────────────────────────────────────────────────
+# Constants
+# ──────────────────────────────────────────────────────────
 GUIDE_TYPES = {
     "Cas9 NGG": "NGG",
     "Cas9 NAG": "NAG",
-    "Cas12a TTTV": "TTTV"
+    "Cas12a TTTV": "TTTV",
 }
 EDIT_TYPES = {
     "Delete 1 bp": "del1",
     "Insert A": "insA",
     "Delete 3 bp": "del3",
     "Insert G": "insG",
-    "Substitute A→T": "subAG"
+    "Substitute A→T": "subAG",
 }
 
 st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
-st.title("🧬 CRISPR Lab NextGen: gRNA Designer & Impact Analyzer")
+st.title("🧬 CRISPR Lab NextGen – gRNA Designer & Impact Analyzer")
 
-# Sidebar: Sequence input & settings
+# ──────────────────────────────────────────────────────────
+# Sidebar – sequence & AI settings
+# ──────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("🧬 Sequence Input")
-    uploaded = st.file_uploader("Upload .fasta file", type=["fasta", "fa", "txt"])
-    dna_seq = st.text_area("Or paste DNA sequence:", height=150, key="dna_seq_area")
+    uploaded = st.file_uploader("Upload .fasta", type=["fasta", "fa", "txt"])
+    dna_seq = st.text_area("Or paste DNA sequence:", height=150, key="dna_seq")
     if uploaded:
-        loaded_seq, err = load_fasta(uploaded)
+        seq, err = load_fasta(uploaded)
         if err:
             st.error(err)
         else:
-            dna_seq = loaded_seq
-    pam_label = st.selectbox("Select PAM Site", options=list(GUIDE_TYPES.keys()), key="pam_site")
+            dna_seq = seq
+
+    pam_label = st.selectbox("PAM", list(GUIDE_TYPES.keys()), key="pam")
     pam = GUIDE_TYPES[pam_label]
-    guide_length = st.slider("Guide Length", 18, 25, 20, key="guide_length")
-    min_gc = st.slider("Minimum GC%", 30, 60, 40, key="min_gc")
-    max_gc = st.slider("Maximum GC%", 60, 80, 70, key="max_gc")
-    bg_seq = st.text_area("Background DNA (for off-target)", height=100, key="bg_seq")
-    max_mismatches = st.slider("Max Mismatches (Off-target)", 0, 4, 2, key="max_mismatches")
-    edit_offset = st.slider("Edit Offset from PAM (for sim)", 0, guide_length, guide_length, help="Where the cut happens relative to gRNA start (e.g., Cas9 is 3bp upstream of PAM).", key="edit_offset")
+    guide_len = st.slider("Guide length", 18, 25, 20, key="guide_len")
+    min_gc = st.slider("Min GC %", 30, 60, 40, key="min_gc")
+    max_gc = st.slider("Max GC %", 60, 80, 70, key="max_gc")
+    bg_seq = st.text_area("Background DNA (off-target)", height=100, key="bg_seq")
+    max_mm = st.slider("Max mismatches", 0, 4, 2, key="max_mm")
+    edit_offset = st.slider(
+        "Edit offset from PAM",
+        0,
+        guide_len,
+        guide_len,
+        key="edit_offset",
+        help="Cas9 cut ≈ 3 bp upstream of PAM; set as needed.",
+    )
+
+    # AI settings
     st.header("🔑 AI Settings")
-    st.session_state.ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend_sidebar")
-    st.session_state.api_key = st.text_input("Gemini/OpenAI API Key", type="password", key="api_key_sidebar")
+    st.session_state.ai_backend = st.selectbox(
+        "Backend", ["Gemini", "OpenAI"], key="ai_backend"
+    )
+    st.session_state.api_key = st.text_input(
+        "API Key", type="password", key="api_key"
+    )
+    # Instant confirmation
+    if st.session_state.api_key and len(st.session_state.api_key.strip()) > 10:
+        st.success(f"{st.session_state.ai_backend} API initialized!")
 
-# Session state setup for ALL
-for key in [
-    "df_guides", "ai_response", "offtarget_df",
-    "selected_gRNA", "selected_edit", "sim_result", "sim_indel", "guide_scores"
-]:
-    if key not in st.session_state:
-        st.session_state[key] = None
+# ──────────────────────────────────────────────────────────
+# Initialise session-state holders
+# ──────────────────────────────────────────────────────────
+for k in (
+    "df_guides",
+    "offtargets",
+    "guide_scores",
+    "selected_gRNA",
+    "selected_edit",
+    "sim_result",
+    "sim_indel",
+    "ai_response",
+):
+    st.session_state.setdefault(k, None)
 
-# Find gRNAs button and results
-if st.button("🔍 Find gRNAs", key="find_grnas"):
-    valid, msg = validate_sequence(dna_seq)
-    if not valid:
+# ──────────────────────────────────────────────────────────
+# gRNA search
+# ──────────────────────────────────────────────────────────
+if st.button("🔍 Find gRNAs"):
+    ok, msg = validate_sequence(dna_seq)
+    if not ok:
         st.error(msg)
         st.session_state.df_guides = None
     else:
-        with st.spinner("Finding gRNAs..."):
+        with st.spinner("Searching gRNAs…"):
             st.session_state.df_guides = find_gRNAs(
-                dna_seq, pam, guide_length, min_gc, max_gc
+                dna_seq, pam, guide_len, min_gc, max_gc
             )
-        st.session_state.offtarget_df = None
-        st.session_state.ai_response = ""
-        st.session_state.sim_result = None
-        st.session_state.sim_indel = None
-        st.session_state.guide_scores = None
+        # reset downstream state
+        st.session_state.update(
+            offtargets=None,
+            guide_scores=None,
+            sim_result=None,
+            sim_indel=None,
+            ai_response="",
+        )
 
-# Main logic starts here
 df = st.session_state.df_guides
-if df is not None and not df.empty:
-    st.success(f"✅ Found {len(df)} gRNAs")
-    st.dataframe(df)
-    csv = df.to_csv(index=False)
-    st.download_button("⬇️ Download gRNAs", data=csv, file_name="guides.csv", mime="text/csv")
+if df is None or df.empty:
+    st.info("Paste DNA & click **Find gRNAs** to begin.")
+    st.stop()
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "🔍 Off-targets (detailed)",
-        "🧬 Simulation & Indel",
-        "🤖 AI Explain",
-        "🖼️ Visualization",
-        "⭐ gRNA Ranking"
-    ])
+# ──────────────────────────────────────────────────────────
+# Display gRNAs
+# ──────────────────────────────────────────────────────────
+st.success(f"✅ {len(df)} gRNAs found")
+st.dataframe(df, use_container_width=True)
+st.download_button("⬇️ Download gRNAs CSV", df.to_csv(index=False), "guides.csv")
 
-    # --- Off-targets tab ---
-    with tab1:
-        if bg_seq.strip():
-            if st.button("Run Off-target Search", key="run_offtarget"):
-                st.session_state.offtarget_df = find_off_targets_detailed(
-                    df, bg_seq, max_mismatches
+tab_ot, tab_sim, tab_ai, tab_vis, tab_rank = st.tabs(
+    ["Off-targets", "Simulation & Indel", "AI Explain", "Visualization", "Ranking"]
+)
+
+# ──────────────────────────────────────────────────────────
+# Off-target tab
+# ──────────────────────────────────────────────────────────
+with tab_ot:
+    if not bg_seq.strip():
+        st.info("Provide background DNA in sidebar for off-target scanning.")
+    else:
+        if st.button("Scan off-targets"):
+            st.session_state.offtargets = find_off_targets_detailed(
+                df, bg_seq, max_mm
+            )
+            # simple specificity score
+            scores = {
+                g: round(
+                    1.0
+                    if st.session_state.offtargets[
+                        st.session_state.offtargets.gRNA == g
+                    ].empty
+                    else 1.0
+                    / (
+                        1
+                        + st.session_state.offtargets[
+                            st.session_state.offtargets.gRNA == g
+                        ]
+                        .Mismatches.sum()
+                    ),
+                    3,
                 )
-                # --- Advanced: gRNA specificity scoring
-                score_dict = {}
-                ot_df = st.session_state.offtarget_df
-                for guide in df["gRNA"]:
-                    hits = ot_df[ot_df["gRNA"] == guide]
-                    score = 1.0 if hits.empty else 1.0 / (1 + hits["Mismatches"].sum())
-                    score_dict[guide] = round(score, 3)
-                st.session_state.guide_scores = score_dict
-            ot_df = st.session_state.offtarget_df
-            if ot_df is not None:
-                if ot_df.empty:
-                    st.info("No off-targets found in background DNA.")
-                else:
-                    st.dataframe(ot_df)
-                    st.download_button("⬇️ Download Off-targets", data=ot_df.to_csv(index=False), file_name="offtargets.csv", mime="text/csv")
+                for g in df.gRNA
+            }
+            st.session_state.guide_scores = scores
+        if st.session_state.offtargets is not None:
+            if st.session_state.offtargets.empty:
+                st.info("No off-targets within given mismatches.")
             else:
-                st.info("Click 'Run Off-target Search' to analyze off-targets.")
+                st.dataframe(st.session_state.offtargets, use_container_width=True)
+                st.download_button(
+                    "⬇️ Download off-targets",
+                    st.session_state.offtargets.to_csv(index=False),
+                    "offtargets.csv",
+                )
+
+# ──────────────────────────────────────────────────────────
+# Simulation & Indel tab
+# ──────────────────────────────────────────────────────────
+with tab_sim:
+    g_list = df.gRNA.tolist()
+    st.session_state.selected_gRNA = st.selectbox(
+        "gRNA", g_list, key="sel_gRNA"
+    )
+    st.session_state.selected_edit = st.selectbox(
+        "Edit type", list(EDIT_TYPES), key="sel_edit"
+    )
+
+    # extra fields for substitution
+    sub_from = sub_to = ""
+    if EDIT_TYPES[st.session_state.selected_edit] == "subAG":
+        sub_from = st.text_input("Sub FROM", "A")
+        sub_to = st.text_input("Sub TO", "T")
+
+    if st.button("Simulate"):
+        idx = dna_seq.upper().find(st.session_state.selected_gRNA)
+        if idx == -1:
+            st.error("gRNA not found in sequence!")
         else:
-            st.info("Paste background DNA above to enable off-target search.")
-
-    # --- Simulation & Indel tab ---
-    with tab2:
-        gRNA_list = df["gRNA"].tolist()
-        if gRNA_list:
-            if st.session_state.selected_gRNA not in gRNA_list:
-                st.session_state.selected_gRNA = gRNA_list[0]
-            selected_gRNA = st.selectbox(
-                "Choose gRNA",
-                gRNA_list,
-                index=gRNA_list.index(st.session_state.selected_gRNA),
-                key="choose_gRNA"
+            st.session_state.sim_result = simulate_protein_edit(
+                dna_seq,
+                idx + edit_offset,
+                EDIT_TYPES[st.session_state.selected_edit],
+                sub_from=sub_from,
+                sub_to=sub_to,
             )
-            st.session_state.selected_gRNA = selected_gRNA
-
-            edit_options = list(EDIT_TYPES.keys())
-            if st.session_state.selected_edit not in edit_options:
-                st.session_state.selected_edit = edit_options[0]
-            selected_edit = st.selectbox(
-                "Edit Type",
-                edit_options,
-                index=edit_options.index(st.session_state.selected_edit),
-                key="choose_edit"
+            st.session_state.sim_indel = indel_simulations(
+                dna_seq, idx + edit_offset
             )
-            st.session_state.selected_edit = selected_edit
 
-            # Extra for substitution
-            if EDIT_TYPES[selected_edit] == "subAG":
-                sub_from = st.text_input("Substitute from", value="A", key="sub_from")
-                sub_to = st.text_input("To", value="T", key="sub_to")
-            else:
-                sub_from = ""
-                sub_to = ""
+    if st.session_state.sim_result:
+        before, after, fs, stop = st.session_state.sim_result
+        st.markdown(f"**Before protein:** `{before}`")
+        st.markdown(f"**After protein:** `{after}`")
+        st.markdown(f"**Diff:** {diff_proteins(before, after)}")
+        st.write("Frameshift:", fs, "| Premature stop:", stop)
+    if st.session_state.sim_indel is not None:
+        st.subheader("±1–3 bp indel simulation")
+        st.dataframe(st.session_state.sim_indel, use_container_width=True)
 
-            if st.button("Simulate Edit", key="simulate_edit"):
-                cut_index = dna_seq.upper().find(st.session_state.selected_gRNA)
-                if cut_index != -1:
-                    prot_before, prot_after, fs, stop = simulate_protein_edit(
-                        dna_seq,
-                        cut_index + edit_offset,
-                        EDIT_TYPES[selected_edit],
-                        sub_from=sub_from, sub_to=sub_to
-                    )
-                    st.session_state.sim_result = (prot_before, prot_after, fs, stop)
-                    st.session_state.sim_indel = indel_simulations(dna_seq, cut_index + edit_offset)
-                else:
-                    st.warning("Selected gRNA not found in sequence.")
-
-            if st.session_state.sim_result:
-                prot_before, prot_after, fs, stop = st.session_state.sim_result
-                st.markdown(f"**Before:** `{prot_before}`")
-                st.markdown(f"**After:** `{prot_after}`")
-                st.markdown(f"**Diff:** {diff_proteins(prot_before, prot_after)}")
-                st.markdown(f"**Frameshift:** {'Yes' if fs else 'No'}")
-                st.markdown(f"**Premature Stop:** {'Yes' if stop else 'No'}")
-                report = f"""
-Protein Before Edit: {prot_before}
-Protein After Edit: {prot_after}
-Frameshift: {'Yes' if fs else 'No'}
-Premature Stop Codon: {'Yes' if stop else 'No'}
-"""
-                st.download_button("⬇️ Download Protein Report", report, file_name="protein_report.txt")
-
-            if st.session_state.sim_indel is not None:
-                st.subheader("Indel Simulations (del/ins 1–3bp):")
-                st.dataframe(st.session_state.sim_indel)
-                st.download_button("⬇️ Download Indel Results", data=st.session_state.sim_indel.to_csv(index=False), file_name="indel_simulation.csv", mime="text/csv")
+# ──────────────────────────────────────────────────────────
+# AI Explain tab
+# ──────────────────────────────────────────────────────────
+with tab_ai:
+    ctx = st.text_area(
+        "Describe the edit context",
+        f"Editing at {st.session_state.selected_gRNA}",
+        key="ai_ctx",
+    )
+    if st.button("Ask AI"):
+        key = st.session_state.api_key
+        if not key or len(key.strip()) < 10:
+            st.error("Enter a valid API key in sidebar.")
         else:
-            st.warning("No gRNAs available for simulation.")
-
-    # --- AI Explain tab (robust session-safe version!) ---
-    with tab3:
-        gRNA_list = df["gRNA"].tolist()
-        gRNA_choice = st.session_state.selected_gRNA if st.session_state.selected_gRNA in gRNA_list else (gRNA_list[0] if gRNA_list else "")
-        gene_info = st.text_area("Describe the edit context", value=f"Editing at {gRNA_choice}", key="gene_info")
-        ai_button = st.button("Ask AI", key="ask_ai_button")
-
-        if ai_button:
-            api_key = st.session_state.api_key
-            st.write("DEBUG: API KEY = ", api_key)  # Remove after debug
-            if not api_key or len(api_key.strip()) < 10:
-                st.session_state.ai_response = "No API key provided! Please enter your Gemini/OpenAI API key in the sidebar."
-            elif st.session_state.ai_backend == "Gemini":
-                try:
+            try:
+                if st.session_state.ai_backend == "Gemini":
                     import google.generativeai as genai
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel('gemini-pro')
-                    response = model.generate_content(gene_info)
-                    st.session_state.ai_response = response.text
-                except Exception as e:
-                    import traceback
-                    tb = traceback.format_exc()
-                    st.session_state.ai_response = f"Error calling Gemini API: {e}\nTraceback: {tb}"
-            elif st.session_state.ai_backend == "OpenAI":
-                try:
+
+                    genai.configure(api_key=key)
+                    model = genai.GenerativeModel("gemini-pro")
+                    st.session_state.ai_response = model.generate_content(ctx).text
+                else:  # OpenAI
                     import openai
-                    openai.api_key = api_key
-                    response = openai.ChatCompletion.create(
+
+                    openai.api_key = key
+                    resp = openai.ChatCompletion.create(
                         model="gpt-3.5-turbo",
                         messages=[
                             {"role": "system", "content": "You are a bioinformatics expert."},
-                            {"role": "user", "content": gene_info}
-                        ]
+                            {"role": "user", "content": ctx},
+                        ],
                     )
-                    st.session_state.ai_response = response.choices[0].message.content
-                except Exception as e:
-                    import traceback
-                    tb = traceback.format_exc()
-                    st.session_state.ai_response = f"Error calling OpenAI API: {e}\nTraceback: {tb}"
+                    st.session_state.ai_response = resp.choices[0].message.content
+            except Exception as e:
+                import traceback
 
-        if st.session_state.ai_response:
-            st.info(st.session_state.ai_response)
-        else:
-            st.caption("Enter description and click 'Ask AI'.")
+                st.session_state.ai_response = (
+                    "API error:\n" + traceback.format_exc(limit=2)
+                )
+    if st.session_state.ai_response:
+        st.info(st.session_state.ai_response)
 
-    # --- Visualization tab ---
-    with tab4:
-        gRNA_list = df["gRNA"].tolist()
-        gRNA_choice = st.session_state.selected_gRNA if st.session_state.selected_gRNA in gRNA_list else (gRNA_list[0] if gRNA_list else "")
-        cut_index = dna_seq.upper().find(gRNA_choice)
-        if cut_index != -1:
-            ax = visualize_guide_location(dna_seq, gRNA_choice, cut_index)
-            st.pyplot(ax.figure)
-        else:
-            st.info("Guide position could not be visualized.")
+# ──────────────────────────────────────────────────────────
+# Visualization tab
+# ──────────────────────────────────────────────────────────
+with tab_vis:
+    idx = dna_seq.upper().find(st.session_state.selected_gRNA)
+    if idx != -1:
+        ax = visualize_guide_location(dna_seq, st.session_state.selected_gRNA, idx)
+        st.pyplot(ax.figure)
+    else:
+        st.info("gRNA not found for visualization.")
 
-    # --- gRNA Ranking tab (advanced) ---
-    with tab5:
-        if st.session_state.guide_scores:
-            st.subheader("gRNA Specificity Ranking (higher=better, fewer off-targets)")
-            spec_df = pd.DataFrame([
-                {"gRNA": g, "SpecificityScore": s} for g, s in st.session_state.guide_scores.items()
-            ]).sort_values("SpecificityScore", ascending=False)
-            st.dataframe(spec_df)
-        else:
-            st.info("Run Off-target Search to see gRNA specificity scores.")
-
-else:
-    st.info("Paste a DNA sequence and click 'Find gRNAs' to begin.")
+# ──────────────────────────────────────────────────────────
+# Ranking tab
+# ──────────────────────────────────────────────────────────
+with tab_rank:
+    if st.session_state.guide_scores:
+        rank_df = (
+            pd.DataFrame(
+                [
+                    {"gRNA": g, "Specificity": s}
+                    for g, s in st.session_state.guide_scores.items()
+                ]
+            )
+            .sort_values("Specificity", ascending=False)
+            .reset_index(drop=True)
+        )
+        st.dataframe(rank_df, use_container_width=True)
+    else:
+        st.info("Run off-target scan to get specificity ranking.")
