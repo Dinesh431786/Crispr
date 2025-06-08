@@ -11,8 +11,8 @@ from analysis import (
     simulate_protein_edit,
     diff_proteins,
     indel_simulations,
-    consensus_guide_score,      # advanced scoring (ML, multi-algo)
-    annotate_protein_domains,   # optional: real annotation for each guide
+    consensus_guide_score,
+    annotate_protein_domains,
 )
 import datetime
 
@@ -45,7 +45,6 @@ with st.sidebar:
         help="Cas9 cut ≈ 3 bp upstream of PAM; set as needed."
     )
 
-    # AI settings
     st.header("🤖 AI Assistant")
     st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend")
     st.text_input("API Key", type="password", key="api_key")
@@ -58,7 +57,6 @@ for k in (
 ):
     st.session_state.setdefault(k, None)
 
-# gRNA search
 if st.button("🔍 Find gRNAs"):
     ok, seq_or_msg = validate_sequence(dna_seq)
     if not ok:
@@ -67,7 +65,6 @@ if st.button("🔍 Find gRNAs"):
     else:
         with st.spinner("Searching gRNAs…"):
             guides = find_gRNAs(seq_or_msg, pam, guide_len, min_gc, max_gc)
-            # Advanced: multi-algo/ML consensus score for each gRNA
             if not guides.empty:
                 guides["ConsensusScore"] = guides["gRNA"].apply(consensus_guide_score)
             st.session_state.df_guides = guides
@@ -81,7 +78,6 @@ if df is None or df.empty:
     st.info("Paste DNA & click **Find gRNAs** to begin.")
     st.stop()
 
-# Display gRNAs in advanced card/table
 st.success(f"✅ {len(df)} gRNAs found. Showing best scoring guides at top.")
 st.dataframe(df.sort_values("ConsensusScore", ascending=False), use_container_width=True)
 st.download_button("⬇️ Download gRNAs CSV", df.to_csv(index=False), "guides.csv")
@@ -123,17 +119,23 @@ with tab_ot:
                     "offtargets.csv",
                 )
 
+# ----- EDIT TYPES: Real mapping -----
+EDIT_TYPES = {
+    "Delete 1 bp": "del1",
+    "Insert A": "insA",
+    "Delete 3 bp": "del3",
+    "Insert G": "insG",
+    "Substitute A→T": "subAG",
+}
 with tab_sim:
     g_list = df.gRNA.tolist()
     st.session_state.selected_gRNA = st.selectbox("gRNA", g_list, key="sel_gRNA")
-    st.session_state.selected_edit = st.selectbox(
-        "Edit type",
-        ["Delete 1 bp", "Insert A", "Delete 3 bp", "Insert G", "Substitute A→T"],
-        key="sel_edit"
+    edit_label = st.selectbox(
+        "Edit type", list(EDIT_TYPES.keys()), key="edit_label"
     )
-
+    st.session_state.selected_edit = EDIT_TYPES[edit_label]
     sub_from = sub_to = ""
-    if st.session_state.selected_edit == "Substitute A→T":
+    if st.session_state.selected_edit == "subAG":
         sub_from = st.text_input("Sub FROM", "A")
         sub_to = st.text_input("Sub TO", "T")
 
@@ -145,14 +147,13 @@ with tab_sim:
             st.session_state.sim_result = simulate_protein_edit(
                 dna_seq,
                 idx + edit_offset,
-                st.session_state.selected_edit.replace(" ", "").lower(),
+                st.session_state.selected_edit,
                 sub_from=sub_from,
                 sub_to=sub_to,
             )
             st.session_state.sim_indel = indel_simulations(
                 dna_seq, idx + edit_offset
             )
-            # (optional) protein domain annotation
             st.session_state.protein_domains = annotate_protein_domains(dna_seq)
 
     if st.session_state.sim_result:
@@ -164,7 +165,6 @@ with tab_sim:
     if st.session_state.sim_indel is not None:
         st.subheader("±1–3 bp indel simulation")
         st.dataframe(st.session_state.sim_indel, use_container_width=True)
-    # (optional) display protein domain annotation
     if st.session_state.protein_domains is not None:
         st.subheader("Protein Domain Annotation")
         st.dataframe(st.session_state.protein_domains)
@@ -289,4 +289,3 @@ with tab_report:
             st.session_state.offtargets.to_csv(index=False),
             "offtargets.csv"
         )
-    # TODO: Add PDF export (using pdfkit/reportlab)
