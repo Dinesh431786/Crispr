@@ -19,23 +19,30 @@ from analysis import (
 SCORE_SUMMARY = """
 #### Understanding the Scores
 
-| Score Name      | What It Means                                                | Range      | How to Use                                              |
-|-----------------|-------------------------------------------------------------|------------|---------------------------------------------------------|
-| Hybrid Score    | Lab-rule score: GC%, homopolymers, seed region, off-targets | 0.0–1.0    | **Excellent:** >0.85, **Recommended:** >0.8             |
-| ML Score        | Data-driven (AI/ML): Patterns from large CRISPR screens     | 0.0–1.0    | **Excellent:** >0.7, **Recommended:** >0.65             |
-| Consensus Score | Average of Hybrid & ML for balanced ranking                 | 0.0–1.0    | **Excellent:** >0.85, **Recommended:** >0.8             |
+| Score Name      | What It Means                                                                                                   | Range      | How to Use                                              |
+|-----------------|----------------------------------------------------------------------------------------------------------------|------------|---------------------------------------------------------|
+| Hybrid Score    | Lab-rule score: GC%, homopolymers, seed region, off-targets. **Rule-based, not ML.**                           | 0.0–1.0    | **Excellent:** >0.85, **Recommended:** >0.8             |
+| ML Score        | Machine learning-inspired (not trained ML): Based on patterns from large CRISPR screens, using rules for GC%, seed region, homopolymers, etc. | 0.0–1.0    | **Excellent:** >0.7, **Recommended:** >0.65             |
+| Consensus Score | Average of Hybrid & ML for balanced ranking                                                                    | 0.0–1.0    | **Excellent:** >0.85, **Recommended:** >0.8             |
 
 **Aim for Consensus Score >0.85 (“Excellent”). Guides >0.8 are also “Recommended”. Lower scores may work but are not ideal.**
+
+**Note:**  
+Hybrid Score is calculated from accepted laboratory rules (GC content, homopolymers, seed region, off-targets, terminal base).  
+It is **not** from machine learning or experimental data.  
+ML Score is “machine learning inspired,” based on features found in published ML models, but **not** the output of a trained ML algorithm.
 """
 
 SCORE_EXPLAIN = """
 **Hybrid Score:**  
-Calculated by laboratory rule-based factors (GC%, homopolymers, seed region, off-target count, terminal base).  
+Calculated using laboratory rule-based factors (GC%, homopolymers, seed region, off-target count, terminal base).  
 Range: 0.0 (poor) to 1.0 (excellent). Higher = more reliable guide.
+This is a purely rule-based score, not derived from ML or experimental training.
 
 **ML Score:**  
 Based on large published CRISPR screen data using AI/ML patterns (GC%, homopolymers, seed, position, etc).  
 Range: 0.0 (poor) to 1.0 (excellent). Higher = more likely to work in practice.
+This score is “ML-inspired,” not from a trained ML model; it is a deterministic rule-based score.
 
 **Consensus Score:**  
 Consensus Score = (Hybrid Score + ML Score) / 2  
@@ -133,7 +140,7 @@ if df is None or df.empty:
 if "HybridScore" not in df.columns or "MLScore" not in df.columns or "ConsensusScore" not in df.columns:
     df["HybridScore"] = [hybrid_score(g) for g in df.gRNA]
     df["MLScore"] = [ml_gRNA_score(g) for g in df.gRNA]
-    df["ConsensusScore"] = (df["HybridScore"] + df["MLScore"]) / 2
+    df["ConsensusScore"] = ((df["HybridScore"] + df["MLScore"]) / 2).clip(upper=1.0)
 
 st.success(f"✅ {len(df)} gRNAs found")
 st.dataframe(df, use_container_width=True)
