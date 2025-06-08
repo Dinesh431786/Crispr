@@ -1,15 +1,18 @@
 from Bio.Seq import Seq
 from difflib import Differ
 import pandas as pd
-import subprocess
-import os
-
-try:
-    import pyhmmer
-except ImportError:
-    pyhmmer = None
 
 def hybrid_score(guide, off_target_count=0, domain_penalty=0):
+    """
+    Hybrid scoring logic:
+    - Starts at 1.0
+    - Penalty if GC out of 40–70%
+    - Penalty for long A/T or G/C runs
+    - Penalty for T/A-rich seed (last 4 bases)
+    - Bonus for terminal G
+    - Penalty for off-targets
+    - Penalty for domain (always zero here)
+    """
     gc = (guide.count('G') + guide.count('C')) / len(guide)
     seed = guide[-4:]
     score = 1.0
@@ -22,10 +25,20 @@ def hybrid_score(guide, off_target_count=0, domain_penalty=0):
     if guide[-1] == "G":
         score += 0.05
     score -= 0.05 * off_target_count
-    score -= 0.2 * domain_penalty
+    score -= 0.2 * domain_penalty  # Always zero
     return round(max(score, 0.0), 3)
 
 def ml_gRNA_score(guide):
+    """
+    ML-style gRNA scoring (heuristic):
+    - Baseline 0.5
+    - +0.2 if GC 40–60%, +0.1 if 35–40% or 60–65%
+    - +0.1 if seed is not T/A rich
+    - -0.1 for any 4X repeat
+    - +0.05 if terminal G
+    - -0.05 if first base is T
+    Clipped between 0.0 and 1.0
+    """
     gc = (guide.count('G') + guide.count('C')) / len(guide)
     score = 0.5  # baseline
     if 0.40 < gc < 0.60:
@@ -187,74 +200,9 @@ def indel_simulations(seq, cut_index):
         })
     return pd.DataFrame(results)
 
-def scan_protein_domains(protein_seq, pfam_db_path="Pfam-A.hmm"):
-    # Try hmmscan first
-    tmp_fa = "temp_prot.fa"
-    tmp_tbl = "temp_tbl.txt"
-    try:
-        with open(tmp_fa, "w") as f:
-            f.write(">query\n" + protein_seq + "\n")
-        cmd = [
-            "hmmscan", "--tblout", tmp_tbl,
-            pfam_db_path, tmp_fa
-        ]
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        domains = []
-        with open(tmp_tbl) as f:
-            for line in f:
-                if line.startswith("#"): continue
-                cols = line.strip().split()
-                if len(cols) > 18:
-                    domains.append({
-                        "Domain": cols[0],
-                        "StartAA": int(cols[17]),
-                        "EndAA": int(cols[18]),
-                        "Evalue": cols[6],
-                    })
-        os.remove(tmp_fa)
-        os.remove(tmp_tbl)
-        return pd.DataFrame(domains)
-    except FileNotFoundError:
-        # hmmscan not installed, fallback to pyhmmer if available
-        if pyhmmer is not None:
-            results = []
-            protein_seq = protein_seq.replace("*", "")
-            seq = pyhmmer.easel.Sequence(name=b"query", sequence=protein_seq.encode())
-            try:
-                with pyhmmer.plan7.HMMFile(pfam_db_path) as hmm_file:
-                    pipeline = pyhmmer.hmmer.Pipeline()
-                    for hmm in hmm_file:
-                        top_hits = pipeline.search_hmm(hmm, [seq])
-                        for hit in top_hits:
-                            for domain in hit.domains:
-                                results.append({
-                                    "Domain": hmm.name.decode(),
-                                    "StartAA": domain.alignment.env_from,
-                                    "EndAA": domain.alignment.env_to,
-                                    "Evalue": float(domain.i_evalue),
-                                })
-            except Exception as e:
-                return pd.DataFrame([{"Domain": "ERROR", "StartAA": 0, "EndAA": 0, "Evalue": str(e)}])
-            if results:
-                return pd.DataFrame(results)
-            else:
-                return pd.DataFrame([{"Domain": "NONE_FOUND", "StartAA": 0, "EndAA": 0, "Evalue": None}])
-        else:
-            return pd.DataFrame([{"Domain": "NOT_AVAILABLE", "StartAA": 0, "EndAA": 0, "Evalue": "No hmmscan or pyhmmer"}])
-    except Exception as e:
-        return pd.DataFrame([{"Domain": "ERROR", "StartAA": 0, "EndAA": 0, "Evalue": str(e)}])
-    finally:
-        # clean up temp files if they exist
-        for fn in [tmp_fa, tmp_tbl]:
-            try:
-                if os.path.exists(fn):
-                    os.remove(fn)
-            except Exception:
-                pass
-
 def annotate_protein_domains(seq):
-    prot = safe_translate(seq)
-    return scan_protein_domains(prot)
+    # Returns empty DataFrame to keep app logic happy
+    return pd.DataFrame(columns=["Domain", "StartAA", "EndAA", "Evalue"])
 
 def predict_hdr_repair(seq, cut_pos):
     if cut_pos >= len(seq) - 1:
