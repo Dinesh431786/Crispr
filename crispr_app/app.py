@@ -38,6 +38,9 @@ with st.sidebar:
     bg_seq = st.text_area("Background DNA (for off-target)", height=100, key="bg_seq")
     max_mismatches = st.slider("Max Mismatches (Off-target)", 0, 4, 2, key="max_mismatches")
     edit_offset = st.slider("Edit Offset from PAM (for sim)", 0, guide_length, guide_length, help="Where the cut happens relative to gRNA start (e.g., Cas9 is 3bp upstream of PAM).", key="edit_offset")
+    st.header("🔑 AI Settings")
+    st.session_state.ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend_sidebar")
+    st.session_state.api_key = st.text_input("Gemini/OpenAI API Key", type="password", key="api_key_sidebar")
 
 # Session state setup for ALL
 for key in [
@@ -92,7 +95,6 @@ if df is not None and not df.empty:
                 ot_df = st.session_state.offtarget_df
                 for guide in df["gRNA"]:
                     hits = ot_df[ot_df["gRNA"] == guide]
-                    # The fewer off-targets, the higher the specificity score!
                     score = 1.0 if hits.empty else 1.0 / (1 + hits["Mismatches"].sum())
                     score_dict[guide] = round(score, 3)
                 st.session_state.guide_scores = score_dict
@@ -112,27 +114,29 @@ if df is not None and not df.empty:
     with tab2:
         gRNA_list = df["gRNA"].tolist()
         if gRNA_list:
-            # Use session_state for persistent selection
             if st.session_state.selected_gRNA not in gRNA_list:
                 st.session_state.selected_gRNA = gRNA_list[0]
-            st.session_state.selected_gRNA = st.selectbox(
+            selected_gRNA = st.selectbox(
                 "Choose gRNA",
                 gRNA_list,
                 index=gRNA_list.index(st.session_state.selected_gRNA),
                 key="choose_gRNA"
             )
+            st.session_state.selected_gRNA = selected_gRNA
 
-            if st.session_state.selected_edit not in EDIT_TYPES:
-                st.session_state.selected_edit = list(EDIT_TYPES.keys())[0]
-            st.session_state.selected_edit = st.selectbox(
+            edit_options = list(EDIT_TYPES.keys())
+            if st.session_state.selected_edit not in edit_options:
+                st.session_state.selected_edit = edit_options[0]
+            selected_edit = st.selectbox(
                 "Edit Type",
-                list(EDIT_TYPES.keys()),
-                index=list(EDIT_TYPES.keys()).index(st.session_state.selected_edit),
+                edit_options,
+                index=edit_options.index(st.session_state.selected_edit),
                 key="choose_edit"
             )
+            st.session_state.selected_edit = selected_edit
 
             # Extra for substitution
-            if EDIT_TYPES[st.session_state.selected_edit] == "subAG":
+            if EDIT_TYPES[selected_edit] == "subAG":
                 sub_from = st.text_input("Substitute from", value="A", key="sub_from")
                 sub_to = st.text_input("To", value="T", key="sub_to")
             else:
@@ -145,7 +149,7 @@ if df is not None and not df.empty:
                     prot_before, prot_after, fs, stop = simulate_protein_edit(
                         dna_seq,
                         cut_index + edit_offset,
-                        EDIT_TYPES[st.session_state.selected_edit],
+                        EDIT_TYPES[selected_edit],
                         sub_from=sub_from, sub_to=sub_to
                     )
                     st.session_state.sim_result = (prot_before, prot_after, fs, stop)
@@ -179,16 +183,17 @@ Premature Stop Codon: {'Yes' if stop else 'No'}
     with tab3:
         gRNA_list = df["gRNA"].tolist()
         gRNA_choice = gRNA_list[0] if gRNA_list else ""
-        ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend")
-        api_key = st.text_input("AI API Key", type="password", key="ai_api_key")
         gene_info = st.text_area("Describe the edit context", value=f"Editing at {gRNA_choice}", key="gene_info")
         if st.button("Ask AI", key="ask_ai_button"):
-            # Replace this with real API call if needed!
-            st.session_state.ai_response = f"Edit context for {gRNA_choice}: {gene_info} (AI explanation would appear here.)"
+            # Example stub: integrate your Gemini/OpenAI API here using st.session_state.api_key
+            st.session_state.ai_response = (
+                f"Edit context for {gRNA_choice}: {gene_info} "
+                f"(AI explanation would appear here. Backend: {st.session_state.ai_backend})"
+            )
         if st.session_state.ai_response:
             st.info(st.session_state.ai_response)
         else:
-            st.caption("Enter key and click 'Ask AI' for real-time explanation.")
+            st.caption("Enter description and click 'Ask AI'.")
 
     # --- Visualization tab ---
     with tab4:
