@@ -5,3 +5,4 @@ pandas
 google-generativeai
 openai
 plotly
+pyhmmer
