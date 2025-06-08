@@ -33,7 +33,7 @@ st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
 st.title("🧬 CRISPR Lab NextGen – gRNA Designer & Impact Analyzer")
 st.markdown(SCORE_EXPLAIN)
 
-# Sidebar
+# ---- Sidebar ----
 with st.sidebar:
     st.header("🧬 Sequence Input")
     uploaded = st.file_uploader("Upload .fasta", type=["fasta", "fa", "txt"])
@@ -66,7 +66,21 @@ with st.sidebar:
         help="Cas9 cut ≈ 3 bp upstream of PAM; set as needed.",
     )
 
-# Session state holders
+    # ---- AI Settings (ALWAYS in sidebar) ----
+    st.header("🤖 AI Explain Settings")
+    ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend_sidebar")
+    gemini_model = "gemini-1.5-flash-latest"
+    if ai_backend == "Gemini":
+        gemini_model = st.selectbox(
+            "Gemini Model",
+            ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest"],
+            key="gemini_model_sidebar",
+        )
+    api_key = st.text_input("API Key", type="password", key="api_key_sidebar")
+    if api_key and len(api_key.strip()) > 10:
+        st.success(f"{ai_backend} API initialized!", icon="✅")
+
+# ---- Session state holders ----
 for k in (
     "df_guides",
     "offtargets",
@@ -79,7 +93,7 @@ for k in (
 ):
     st.session_state.setdefault(k, None)
 
-# gRNA search
+# ---- gRNA search ----
 if st.button("🔍 Find gRNAs"):
     ok, msg = validate_sequence(dna_seq)
     if not ok:
@@ -103,7 +117,7 @@ if df is None or df.empty:
     st.info("Paste DNA & click **Find gRNAs** to begin.")
     st.stop()
 
-# Add scores columns
+# ---- Add scores columns ----
 if "HybridScore" not in df.columns or "MLScore" not in df.columns:
     df["HybridScore"] = [analysis.hybrid_score(g) for g in df.gRNA]
     df["MLScore"] = [analysis.ml_gRNA_score(g) for g in df.gRNA]
@@ -116,7 +130,7 @@ tab_ot, tab_sim, tab_ai, tab_vis, tab_rank = st.tabs(
     ["Off-targets", "Simulation & Indel", "AI Explain", "Visualization", "Ranking"]
 )
 
-# Off-target tab
+# ---- Off-target tab ----
 with tab_ot:
     if not bg_seq.strip():
         st.info("Provide background DNA in sidebar for off-target scanning.")
@@ -155,7 +169,7 @@ with tab_ot:
                     "offtargets.csv",
                 )
 
-# Simulation & Indel tab
+# ---- Simulation & Indel tab ----
 with tab_sim:
     g_list = df.gRNA.tolist()
     st.session_state.selected_gRNA = st.selectbox(
@@ -202,23 +216,20 @@ with tab_sim:
         st.subheader("±1–3 bp indel simulation")
         st.dataframe(st.session_state.sim_indel, use_container_width=True)
 
-# AI Explain tab (with full context to Gemini/OpenAI, now Gemini model select)
+# ---- AI Explain tab (now uses only sidebar settings for AI) ----
 with tab_ai:
     st.header("AI Explain (Gemini / OpenAI)")
-    # Build auto-context for the AI prompt
     context_parts = [
         "### Hybrid and ML Score Logic\n",
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
         df[["gRNA", "HybridScore", "MLScore"]].head(10).to_markdown(index=False),
     ]
-    # Off-targets summary
     ot_df = st.session_state.offtargets
     if ot_df is not None and not ot_df.empty:
         off_target_summary = ot_df.groupby("gRNA")["Mismatches"].count().reset_index()
         context_parts.append("\n\n### Off-target Summary\n")
         context_parts.append(off_target_summary.to_markdown(index=False))
-    # Simulation results
     sim_res = st.session_state.sim_result
     if sim_res:
         before, after, fs, stop = sim_res
@@ -233,18 +244,12 @@ with tab_ai:
         key="ai_notes"
     )
     full_prompt = context_str + "\n\n" + user_notes.strip()
-    ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend")
-    gemini_model = "gemini-1.5-flash-latest"
-    if ai_backend == "Gemini":
-        gemini_model = st.selectbox(
-            "Gemini Model",
-            ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest"],
-            key="gemini_model",
-        )
-    api_key = st.text_input("API Key", type="password", key="api_key")
     if st.button("Ask AI"):
+        ai_backend = st.session_state.get("ai_backend_sidebar", "Gemini")
+        api_key = st.session_state.get("api_key_sidebar", "")
+        gemini_model = st.session_state.get("gemini_model_sidebar", "gemini-1.5-flash-latest")
         if not api_key or len(api_key.strip()) < 10:
-            st.error("Enter a valid API key above.")
+            st.error("Enter a valid API key in the sidebar.")
         else:
             try:
                 if ai_backend == "Gemini":
@@ -270,7 +275,7 @@ with tab_ai:
     if st.session_state.ai_response:
         st.info(st.session_state.ai_response)
 
-# Visualization tab
+# ---- Visualization tab ----
 with tab_vis:
     idx = dna_seq.upper().find(st.session_state.selected_gRNA)
     if idx != -1:
@@ -279,7 +284,7 @@ with tab_vis:
     else:
         st.info("gRNA not found for visualization.")
 
-# Ranking tab
+# ---- Ranking tab ----
 with tab_rank:
     if st.session_state.guide_scores:
         rank_df = (
