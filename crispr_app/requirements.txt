@@ -4,3 +4,4 @@ dna-features-viewer
 pandas
 google-generativeai
 openai
+plotly
