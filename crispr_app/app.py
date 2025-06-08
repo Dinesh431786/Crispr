@@ -29,9 +29,6 @@ EDIT_TYPES = {
 st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
 st.title("🧬 CRISPR Lab NextGen – gRNA Designer & Impact Analyzer")
 
-# ────────────────────────────────
-# Sidebar – sequence & AI settings
-# ────────────────────────────────
 with st.sidebar:
     st.header("🧬 Sequence Input")
     uploaded = st.file_uploader("Upload .fasta", type=["fasta", "fa", "txt"])
@@ -70,9 +67,6 @@ with st.sidebar:
     if st.session_state.get("api_key") and len(st.session_state["api_key"].strip()) > 10:
         st.success(f"{st.session_state['ai_backend']} API initialized!")
 
-# ───────────────────────────────────────────────
-# Initialise session-state holders if not present
-# ───────────────────────────────────────────────
 for k in (
     "df_guides",
     "offtargets",
@@ -85,18 +79,15 @@ for k in (
 ):
     st.session_state.setdefault(k, None)
 
-# ────────────────────────────────
-# gRNA search
-# ────────────────────────────────
 if st.button("🔍 Find gRNAs"):
-    ok, msg = validate_sequence(dna_seq)
+    ok, msg_or_seq = validate_sequence(dna_seq)
     if not ok:
-        st.error(msg)
+        st.error(msg_or_seq)
         st.session_state.df_guides = None
     else:
         with st.spinner("Searching gRNAs…"):
             st.session_state.df_guides = find_gRNAs(
-                dna_seq, pam, guide_len, min_gc, max_gc
+                msg_or_seq, pam, guide_len, min_gc, max_gc
             )
         st.session_state.update(
             offtargets=None,
@@ -111,9 +102,6 @@ if df is None or df.empty:
     st.info("Paste DNA & click **Find gRNAs** to begin.")
     st.stop()
 
-# ────────────────────────────────
-# Display gRNAs
-# ────────────────────────────────
 st.success(f"✅ {len(df)} gRNAs found")
 st.dataframe(df, use_container_width=True)
 st.download_button("⬇️ Download gRNAs CSV", df.to_csv(index=False), "guides.csv")
@@ -122,9 +110,6 @@ tab_ot, tab_sim, tab_ai, tab_vis, tab_rank = st.tabs(
     ["Off-targets", "Simulation & Indel", "AI Explain", "Visualization", "Ranking"]
 )
 
-# ────────────────────────────────
-# Off-target tab
-# ────────────────────────────────
 with tab_ot:
     if not bg_seq.strip():
         st.info("Provide background DNA in sidebar for off-target scanning.")
@@ -133,7 +118,6 @@ with tab_ot:
             st.session_state.offtargets = find_off_targets_detailed(
                 df, bg_seq, max_mm
             )
-            # simple specificity score
             scores = {
                 g: round(
                     1.0
@@ -164,9 +148,6 @@ with tab_ot:
                     "offtargets.csv",
                 )
 
-# ────────────────────────────────
-# Simulation & Indel tab
-# ────────────────────────────────
 with tab_sim:
     g_list = df.gRNA.tolist()
     st.session_state.selected_gRNA = st.selectbox(
@@ -176,7 +157,6 @@ with tab_sim:
         "Edit type", list(EDIT_TYPES), key="sel_edit"
     )
 
-    # extra fields for substitution
     sub_from = sub_to = ""
     if EDIT_TYPES[st.session_state.selected_edit] == "subAG":
         sub_from = st.text_input("Sub FROM", "A")
@@ -208,11 +188,7 @@ with tab_sim:
         st.subheader("±1–3 bp indel simulation")
         st.dataframe(st.session_state.sim_indel, use_container_width=True)
 
-# ────────────────────────────────
-# AI Explain tab (advanced auto-context)
-# ────────────────────────────────
 with tab_ai:
-    # Gather all relevant context
     selected_gRNA = st.session_state.get("selected_gRNA", "")
     specificity = (
         st.session_state.guide_scores.get(selected_gRNA)
@@ -220,9 +196,8 @@ with tab_ai:
     )
     edit_type = st.session_state.get("selected_edit", "")
     sim_result = st.session_state.get("sim_result")
-    dna_excerpt = dna_seq  # or slice with the gRNA for compactness
+    dna_excerpt = dna_seq
 
-    # Build smart prompt
     context_lines = []
     if selected_gRNA:
         context_lines.append(
@@ -286,20 +261,19 @@ with tab_ai:
     if st.session_state.ai_response:
         st.info(st.session_state.ai_response)
 
-# ────────────────────────────────
-# Visualization tab
-# ────────────────────────────────
 with tab_vis:
     idx = dna_seq.upper().find(st.session_state.selected_gRNA)
     if idx != -1:
-        ax = visualize_guide_location(dna_seq, st.session_state.selected_gRNA, idx)
+        ax = visualize_guide_location(
+            dna_seq,
+            st.session_state.selected_gRNA,
+            idx,
+            # Optionally pass PAM and strand if available for advanced visual
+        )
         st.pyplot(ax.figure)
     else:
         st.info("gRNA not found for visualization.")
 
-# ────────────────────────────────
-# Ranking tab
-# ────────────────────────────────
 with tab_rank:
     if st.session_state.guide_scores:
         rank_df = (
