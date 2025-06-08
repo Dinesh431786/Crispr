@@ -4,7 +4,6 @@ import pandas as pd
 import subprocess
 import os
 
-### --- HYBRID GUIDE SCORING (rule-based + domain/offtarget logic) --- ###
 def hybrid_score(guide, off_target_count=0, domain_penalty=0):
     gc = (guide.count('G') + guide.count('C')) / len(guide)
     seed = guide[-4:]
@@ -17,9 +16,28 @@ def hybrid_score(guide, off_target_count=0, domain_penalty=0):
         score -= 0.1
     if guide[-1] == "G":
         score += 0.05
-    score -= 0.05 * off_target_count  # penalty per off-target hit
-    score -= 0.2 * domain_penalty     # strong penalty if it disrupts a key domain
+    score -= 0.05 * off_target_count
+    score -= 0.2 * domain_penalty
     return round(max(score, 0.0), 3)
+
+def ml_gRNA_score(guide):
+    gc = (guide.count('G') + guide.count('C')) / len(guide)
+    score = 0.5  # baseline
+    if 0.40 < gc < 0.60:
+        score += 0.2
+    elif 0.35 < gc <= 0.40 or 0.60 <= gc < 0.65:
+        score += 0.1
+    seed = guide[-4:]
+    if seed.count('T') + seed.count('A') <= 1:
+        score += 0.1
+    for b in "ATCG":
+        if b*4 in guide:
+            score -= 0.1
+    if guide[-1] == "G":
+        score += 0.05
+    if guide[0] == "T":
+        score -= 0.05
+    return round(max(0.0, min(score, 1.0)), 3)
 
 def check_pam(pam_seq, pam):
     if pam == "NGG":
@@ -63,7 +81,6 @@ def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70):
                 })
     return pd.DataFrame(guides)
 
-### --- OFF-TARGETS: Full exact search --- ###
 def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
     results = []
     bg_seq = background_seq.upper().replace('\n', '')[:1_000_000]
@@ -84,7 +101,6 @@ def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
             "OffTargetCount": len(details),
             "Details": details
         })
-    # Flatten for output
     flat = []
     for result in results:
         for detail in result["Details"]:
@@ -96,7 +112,6 @@ def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
             })
     return pd.DataFrame(flat)
 
-### --- PROTEIN EDIT SIMULATION --- ###
 def safe_translate(seq):
     extra = len(seq) % 3
     if extra != 0:
@@ -167,14 +182,11 @@ def indel_simulations(seq, cut_index):
         })
     return pd.DataFrame(results)
 
-### --- PROTEIN DOMAIN ANNOTATION USING LOCAL PFAM/HMMER --- ###
 def scan_protein_domains(protein_seq, pfam_db_path="Pfam-A.hmm"):
-    # Write protein to temp fasta
     tmp_fa = "temp_prot.fa"
     tmp_tbl = "temp_tbl.txt"
     with open(tmp_fa, "w") as f:
         f.write(">query\n" + protein_seq + "\n")
-    # Run hmmscan (assumes HMMER installed and pfam_db_path exists)
     cmd = [
         "hmmscan", "--tblout", tmp_tbl,
         pfam_db_path, tmp_fa
@@ -202,3 +214,19 @@ def scan_protein_domains(protein_seq, pfam_db_path="Pfam-A.hmm"):
 def annotate_protein_domains(seq):
     prot = safe_translate(seq)
     return scan_protein_domains(prot)
+
+def predict_hdr_repair(seq, cut_pos):
+    if cut_pos >= len(seq) - 1:
+        return "uncertain"
+    after = seq[:cut_pos] + seq[cut_pos+1:]
+    before_prot = safe_translate(seq)
+    after_prot = safe_translate(after)
+    if len(after) % 3 != len(seq) % 3:
+        if "*" in after_prot and "*" not in before_prot:
+            return "frameshift/early stop"
+        return "frameshift"
+    else:
+        if after_prot == before_prot:
+            return "silent"
+        else:
+            return "in-frame"
