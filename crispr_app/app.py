@@ -216,34 +216,48 @@ with tab_sim:
         st.subheader("±1–3 bp indel simulation")
         st.dataframe(st.session_state.sim_indel, use_container_width=True)
 
-# ---- AI Explain tab (now uses only sidebar settings for AI) ----
+# ---- AI Explain tab (Gemini/OpenAI, full context) ----
 with tab_ai:
     st.header("AI Explain (Gemini / OpenAI)")
+    # Build context for AI prompt
     context_parts = [
         "### Hybrid and ML Score Logic\n",
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
-        df[["gRNA", "HybridScore", "MLScore"]].head(10).to_markdown(index=False),
+        df[["gRNA", "HybridScore", "MLScore"]].head(10).to_csv(sep="|", index=False),
     ]
     ot_df = st.session_state.offtargets
     if ot_df is not None and not ot_df.empty:
         off_target_summary = ot_df.groupby("gRNA")["Mismatches"].count().reset_index()
         context_parts.append("\n\n### Off-target Summary\n")
-        context_parts.append(off_target_summary.to_markdown(index=False))
+        context_parts.append(off_target_summary.to_csv(sep="|", index=False))
     sim_res = st.session_state.sim_result
     if sim_res:
         before, after, fs, stop = sim_res
         context_parts.append("\n\n### Simulation Result\n")
-        context_parts.append(f"**Before protein:** `{before}`\n")
-        context_parts.append(f"**After protein:** `{after}`\n")
+        context_parts.append(f"Before protein: {before}\n")
+        context_parts.append(f"After protein: {after}\n")
         context_parts.append(f"Frameshift: {fs} | Premature stop: {stop}\n")
     context_str = "\n".join(context_parts)
+    # Show context for debugging
+    with st.expander("🔎 See full context sent to AI (for debugging)", expanded=False):
+        st.code(context_str)
     user_notes = st.text_area(
         "Add any specific questions or notes for AI (optional):", 
         "", 
         key="ai_notes"
     )
-    full_prompt = context_str + "\n\n" + user_notes.strip()
+    # Final prompt
+    prompt = (
+        context_str
+        + "\n\n"
+        + (user_notes.strip() if user_notes else "")
+        + "\n\nSummarize the above results for a CRISPR scientist, highlighting: "
+          "1. Which guides have the highest reliability and why. "
+          "2. Any off-target risks. "
+          "3. Editing simulation impact. "
+          "4. Additional tips for experiment design."
+    )
     if st.button("Ask AI"):
         ai_backend = st.session_state.get("ai_backend_sidebar", "Gemini")
         api_key = st.session_state.get("api_key_sidebar", "")
@@ -256,7 +270,7 @@ with tab_ai:
                     import google.generativeai as genai
                     genai.configure(api_key=api_key)
                     model = genai.GenerativeModel(gemini_model)
-                    result = model.generate_content(full_prompt)
+                    result = model.generate_content(prompt)
                     st.session_state.ai_response = result.text if hasattr(result, "text") else str(result)
                 else:
                     import openai
@@ -265,7 +279,7 @@ with tab_ai:
                         model="gpt-3.5-turbo",
                         messages=[
                             {"role": "system", "content": "You are a CRISPR genome editing expert."},
-                            {"role": "user", "content": full_prompt},
+                            {"role": "user", "content": prompt},
                         ],
                     )
                     st.session_state.ai_response = resp.choices[0].message.content
