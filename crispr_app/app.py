@@ -1,4 +1,3 @@
-import streamlit as st
 import pandas as pd
 from utils import (
     validate_sequence,
@@ -13,6 +12,9 @@ from analysis import (
     indel_simulations,
 )
 
+# ──────────────────────────────────────────────────────────
+# Constants
+# ──────────────────────────────────────────────────────────
 GUIDE_TYPES = {
     "Cas9 NGG": "NGG",
     "Cas9 NAG": "NAG",
@@ -29,6 +31,9 @@ EDIT_TYPES = {
 st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
 st.title("🧬 CRISPR Lab NextGen – gRNA Designer & Impact Analyzer")
 
+# ──────────────────────────────────────────────────────────
+# Sidebar – sequence & AI settings
+# ──────────────────────────────────────────────────────────
 with st.sidebar:
     st.header("🧬 Sequence Input")
     uploaded = st.file_uploader("Upload .fasta", type=["fasta", "fa", "txt"])
@@ -56,6 +61,7 @@ with st.sidebar:
         help="Cas9 cut ≈ 3 bp upstream of PAM; set as needed.",
     )
 
+    # AI settings
     st.header("🔑 AI Settings")
     st.session_state.ai_backend = st.selectbox(
         "Backend", ["Gemini", "OpenAI"], key="ai_backend"
@@ -63,9 +69,13 @@ with st.sidebar:
     st.session_state.api_key = st.text_input(
         "API Key", type="password", key="api_key"
     )
+    # Instant confirmation
     if st.session_state.api_key and len(st.session_state.api_key.strip()) > 10:
         st.success(f"{st.session_state.ai_backend} API initialized!")
 
+# ──────────────────────────────────────────────────────────
+# Initialise session-state holders
+# ──────────────────────────────────────────────────────────
 for k in (
     "df_guides",
     "offtargets",
@@ -78,6 +88,9 @@ for k in (
 ):
     st.session_state.setdefault(k, None)
 
+# ──────────────────────────────────────────────────────────
+# gRNA search
+# ──────────────────────────────────────────────────────────
 if st.button("🔍 Find gRNAs"):
     ok, msg = validate_sequence(dna_seq)
     if not ok:
@@ -88,6 +101,7 @@ if st.button("🔍 Find gRNAs"):
             st.session_state.df_guides = find_gRNAs(
                 dna_seq, pam, guide_len, min_gc, max_gc
             )
+        # reset downstream state
         st.session_state.update(
             offtargets=None,
             guide_scores=None,
@@ -101,6 +115,9 @@ if df is None or df.empty:
     st.info("Paste DNA & click **Find gRNAs** to begin.")
     st.stop()
 
+# ──────────────────────────────────────────────────────────
+# Display gRNAs
+# ──────────────────────────────────────────────────────────
 st.success(f"✅ {len(df)} gRNAs found")
 st.dataframe(df, use_container_width=True)
 st.download_button("⬇️ Download gRNAs CSV", df.to_csv(index=False), "guides.csv")
@@ -109,6 +126,9 @@ tab_ot, tab_sim, tab_ai, tab_vis, tab_rank = st.tabs(
     ["Off-targets", "Simulation & Indel", "AI Explain", "Visualization", "Ranking"]
 )
 
+# ──────────────────────────────────────────────────────────
+# Off-target tab
+# ──────────────────────────────────────────────────────────
 with tab_ot:
     if not bg_seq.strip():
         st.info("Provide background DNA in sidebar for off-target scanning.")
@@ -117,6 +137,7 @@ with tab_ot:
             st.session_state.offtargets = find_off_targets_detailed(
                 df, bg_seq, max_mm
             )
+            # simple specificity score
             scores = {
                 g: round(
                     1.0
@@ -147,6 +168,9 @@ with tab_ot:
                     "offtargets.csv",
                 )
 
+# ──────────────────────────────────────────────────────────
+# Simulation & Indel tab
+# ──────────────────────────────────────────────────────────
 with tab_sim:
     g_list = df.gRNA.tolist()
     st.session_state.selected_gRNA = st.selectbox(
@@ -155,6 +179,8 @@ with tab_sim:
     st.session_state.selected_edit = st.selectbox(
         "Edit type", list(EDIT_TYPES), key="sel_edit"
     )
+
+    # extra fields for substitution
     sub_from = sub_to = ""
     if EDIT_TYPES[st.session_state.selected_edit] == "subAG":
         sub_from = st.text_input("Sub FROM", "A")
@@ -186,6 +212,9 @@ with tab_sim:
         st.subheader("±1–3 bp indel simulation")
         st.dataframe(st.session_state.sim_indel, use_container_width=True)
 
+# ──────────────────────────────────────────────────────────
+# AI Explain tab
+# ──────────────────────────────────────────────────────────
 with tab_ai:
     ctx = st.text_area(
         "Describe the edit context",
@@ -202,12 +231,9 @@ with tab_ai:
                     import google.generativeai as genai
 
                     genai.configure(api_key=key)
-                    model = genai.GenerativeModel(
-                        model_name="models/gemini-1.5-flash-latest"
-                    )
-                    response = model.generate_content(ctx)
-                    st.session_state.ai_response = response.text if hasattr(response, "text") else str(response)
-                else:
+                    model = genai.GenerativeModel("gemini-pro")
+                    st.session_state.ai_response = model.generate_content(ctx).text
+                else:  # OpenAI
                     import openai
 
                     openai.api_key = key
@@ -228,6 +254,9 @@ with tab_ai:
     if st.session_state.ai_response:
         st.info(st.session_state.ai_response)
 
+# ──────────────────────────────────────────────────────────
+# Visualization tab
+# ──────────────────────────────────────────────────────────
 with tab_vis:
     idx = dna_seq.upper().find(st.session_state.selected_gRNA)
     if idx != -1:
@@ -236,6 +265,9 @@ with tab_vis:
     else:
         st.info("gRNA not found for visualization.")
 
+# ──────────────────────────────────────────────────────────
+# Ranking tab
+# ──────────────────────────────────────────────────────────
 with tab_rank:
     if st.session_state.guide_scores:
         rank_df = (
