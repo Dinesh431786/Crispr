@@ -16,10 +16,10 @@ EDIT_TYPES = {
     "Substitute A→T": "subAG"
 }
 
-st.set_page_config(page_title="🧬 CRISPR Lab", layout="wide")
-st.title("🧬 CRISPR Lab: gRNA Designer & Impact Analyzer")
+st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
+st.title("🧬 CRISPR Lab NextGen: gRNA Designer & Impact Analyzer")
 
-# Sidebar: Sequence input
+# Sidebar: Sequence input & settings
 with st.sidebar:
     st.header("🧬 Sequence Input")
     uploaded = st.file_uploader("Upload .fasta file", type=["fasta", "fa", "txt"])
@@ -37,15 +37,17 @@ with st.sidebar:
     max_gc = st.slider("Maximum GC%", 60, 80, 70, key="max_gc")
     bg_seq = st.text_area("Background DNA (for off-target)", height=100, key="bg_seq")
     max_mismatches = st.slider("Max Mismatches (Off-target)", 0, 4, 2, key="max_mismatches")
+    edit_offset = st.slider("Edit Offset from PAM (for sim)", 0, guide_length, guide_length, help="Where the cut happens relative to gRNA start (e.g., Cas9 is 3bp upstream of PAM).", key="edit_offset")
 
-# Session state setup
+# Session state setup for ALL
 for key in [
     "df_guides", "ai_response", "offtarget_df",
-    "selected_gRNA", "selected_edit", "sim_result", "sim_indel"
+    "selected_gRNA", "selected_edit", "sim_result", "sim_indel", "guide_scores"
 ]:
     if key not in st.session_state:
         st.session_state[key] = None
 
+# Find gRNAs button and results
 if st.button("🔍 Find gRNAs", key="find_grnas"):
     valid, msg = validate_sequence(dna_seq)
     if not valid:
@@ -60,6 +62,7 @@ if st.button("🔍 Find gRNAs", key="find_grnas"):
         st.session_state.ai_response = ""
         st.session_state.sim_result = None
         st.session_state.sim_indel = None
+        st.session_state.guide_scores = None
 
 # Main logic starts here
 df = st.session_state.df_guides
@@ -69,11 +72,12 @@ if df is not None and not df.empty:
     csv = df.to_csv(index=False)
     st.download_button("⬇️ Download gRNAs", data=csv, file_name="guides.csv", mime="text/csv")
 
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🔍 Off-targets (detailed)",
         "🧬 Simulation & Indel",
         "🤖 AI Explain",
-        "🖼️ Visualization"
+        "🖼️ Visualization",
+        "⭐ gRNA Ranking"
     ])
 
     # --- Off-targets tab ---
@@ -83,6 +87,15 @@ if df is not None and not df.empty:
                 st.session_state.offtarget_df = find_off_targets_detailed(
                     df, bg_seq, max_mismatches
                 )
+                # --- Advanced: gRNA specificity scoring
+                score_dict = {}
+                ot_df = st.session_state.offtarget_df
+                for guide in df["gRNA"]:
+                    hits = ot_df[ot_df["gRNA"] == guide]
+                    # The fewer off-targets, the higher the specificity score!
+                    score = 1.0 if hits.empty else 1.0 / (1 + hits["Mismatches"].sum())
+                    score_dict[guide] = round(score, 3)
+                st.session_state.guide_scores = score_dict
             ot_df = st.session_state.offtarget_df
             if ot_df is not None:
                 if ot_df.empty:
@@ -99,13 +112,16 @@ if df is not None and not df.empty:
     with tab2:
         gRNA_list = df["gRNA"].tolist()
         if gRNA_list:
+            # Use session_state for persistent selection
             if st.session_state.selected_gRNA not in gRNA_list:
                 st.session_state.selected_gRNA = gRNA_list[0]
             st.session_state.selected_gRNA = st.selectbox(
-                "Choose gRNA", gRNA_list,
+                "Choose gRNA",
+                gRNA_list,
                 index=gRNA_list.index(st.session_state.selected_gRNA),
                 key="choose_gRNA"
             )
+
             if st.session_state.selected_edit not in EDIT_TYPES:
                 st.session_state.selected_edit = list(EDIT_TYPES.keys())[0]
             st.session_state.selected_edit = st.selectbox(
@@ -114,6 +130,8 @@ if df is not None and not df.empty:
                 index=list(EDIT_TYPES.keys()).index(st.session_state.selected_edit),
                 key="choose_edit"
             )
+
+            # Extra for substitution
             if EDIT_TYPES[st.session_state.selected_edit] == "subAG":
                 sub_from = st.text_input("Substitute from", value="A", key="sub_from")
                 sub_to = st.text_input("To", value="T", key="sub_to")
@@ -125,11 +143,13 @@ if df is not None and not df.empty:
                 cut_index = dna_seq.upper().find(st.session_state.selected_gRNA)
                 if cut_index != -1:
                     prot_before, prot_after, fs, stop = simulate_protein_edit(
-                        dna_seq, cut_index + guide_length, EDIT_TYPES[st.session_state.selected_edit],
+                        dna_seq,
+                        cut_index + edit_offset,
+                        EDIT_TYPES[st.session_state.selected_edit],
                         sub_from=sub_from, sub_to=sub_to
                     )
                     st.session_state.sim_result = (prot_before, prot_after, fs, stop)
-                    st.session_state.sim_indel = indel_simulations(dna_seq, cut_index + guide_length)
+                    st.session_state.sim_indel = indel_simulations(dna_seq, cut_index + edit_offset)
                 else:
                     st.warning("Selected gRNA not found in sequence.")
 
@@ -173,13 +193,24 @@ Premature Stop Codon: {'Yes' if stop else 'No'}
     # --- Visualization tab ---
     with tab4:
         gRNA_list = df["gRNA"].tolist()
-        gRNA_choice = gRNA_list[0] if gRNA_list else ""
+        gRNA_choice = st.session_state.selected_gRNA if st.session_state.selected_gRNA in gRNA_list else (gRNA_list[0] if gRNA_list else "")
         cut_index = dna_seq.upper().find(gRNA_choice)
         if cut_index != -1:
             ax = visualize_guide_location(dna_seq, gRNA_choice, cut_index)
             st.pyplot(ax.figure)
         else:
             st.info("Guide position could not be visualized.")
+
+    # --- gRNA Ranking tab (advanced) ---
+    with tab5:
+        if st.session_state.guide_scores:
+            st.subheader("gRNA Specificity Ranking (higher=better, fewer off-targets)")
+            spec_df = pd.DataFrame([
+                {"gRNA": g, "SpecificityScore": s} for g, s in st.session_state.guide_scores.items()
+            ]).sort_values("SpecificityScore", ascending=False)
+            st.dataframe(spec_df)
+        else:
+            st.info("Run Off-target Search to see gRNA specificity scores.")
 
 else:
     st.info("Paste a DNA sequence and click 'Find gRNAs' to begin.")
