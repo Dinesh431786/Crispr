@@ -40,7 +40,7 @@ Based on published patterns in large gRNA screens (GC%, homopolymers, seed, posi
 **Interpretation:** Higher = more likely to work according to CRISPR data trends.
 
 **Consensus Score:**  
-Combines the Hybrid Score and ML Score into a single metric by averaging them:Consensus Score = (Hybrid Score + ML Score)
+Combines the Hybrid Score and ML Score into a single metric by averaging them: Consensus Score = (Hybrid Score + ML Score) 
 
 This provides a balanced view, giving equal importance to laboratory rules and machine-learning predictions.  
 **Interpretation:** Use guides with the highest Consensus Scores for best results!
@@ -48,9 +48,7 @@ This provides a balanced view, giving equal importance to laboratory rules and m
 
 st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
 st.title("🧬 CRISPR Lab NextGen – gRNA Designer & Impact Analyzer")
-
 st.markdown(SCORE_SUMMARY)
-st.markdown(SCORE_EXPLAIN)
 
 # ---- Sidebar ----
 with st.sidebar:
@@ -98,7 +96,6 @@ with st.sidebar:
     if api_key and len(api_key.strip()) > 10:
         st.success(f"{ai_backend} API initialized!", icon="✅")
 
-# ---- Session state holders ----
 for k in (
     "df_guides",
     "offtargets",
@@ -112,7 +109,6 @@ for k in (
 ):
     st.session_state.setdefault(k, None)
 
-# ---- gRNA search ----
 if st.button("🔍 Find gRNAs"):
     ok, msg = validate_sequence(dna_seq)
     if not ok:
@@ -137,7 +133,6 @@ if df is None or df.empty:
     st.info("Paste DNA & click **Find gRNAs** to begin.")
     st.stop()
 
-# ---- Add scores columns ----
 if "HybridScore" not in df.columns or "MLScore" not in df.columns or "ConsensusScore" not in df.columns:
     df["HybridScore"] = [hybrid_score(g) for g in df.gRNA]
     df["MLScore"] = [ml_gRNA_score(g) for g in df.gRNA]
@@ -147,7 +142,6 @@ st.success(f"✅ {len(df)} gRNAs found")
 st.dataframe(df, use_container_width=True)
 st.download_button("⬇️ Download gRNAs CSV", df.to_csv(index=False), "guides.csv")
 
-# ---- ONE CLICK GEMINI REPORT ----
 st.markdown("---")
 st.header("📄 One Click Gemini Report")
 st.markdown(SCORE_SUMMARY)
@@ -218,7 +212,6 @@ if st.session_state.gemini_report:
     st.subheader("Gemini AI Report")
     st.info(st.session_state.gemini_report)
 
-# ---- TABS (Off-targets, Simulation, AI, Visualization, Ranking) ----
 tab_ot, tab_sim, tab_ai, tab_vis, tab_rank = st.tabs(
     ["Off-targets", "Simulation & Indel", "AI Explain", "Visualization", "Ranking"]
 )
