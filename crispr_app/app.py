@@ -22,6 +22,8 @@ SCORE_SUMMARY = """
 |---------------|-------------------------------------------------------------|------------|---------------------------------------|
 | Hybrid Score  | Lab-rule score: GC%, homopolymers, seed region, off-targets | 0.0–1.0    | Higher is better. Aim for >0.85       |
 | ML Score      | Data-driven (AI/ML): Patterns from large CRISPR screens     | 0.0–1.0    | Higher is better. Aim for >0.7        |
+| Consensus Score | The average of Hybrid & ML for balanced ranking             | 0.0–1.0    | Highest values are most reliable      |
+
 
 **Best gRNAs score high in both! If in doubt, use guides that are high in both columns.**
 """
