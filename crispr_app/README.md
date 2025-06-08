@@ -1,21 +1,17 @@
-CRISPR Lab: Advanced gRNA Designer & Impact Analyzer
+# CRISPR Lab: Advanced gRNA Designer & Impact Analyzer
 
-CRISPR Lab is a modular, open-source, professional CRISPR analysis suite for researchers and educators.
-- 🧬 Real gRNA design (GuideMaker backend)
-- 🧬 In-memory off-target search
-- 🧬 Protein edit simulation & visualization
-- 🤖 AI-powered “Explain Edit” tab (Gemini & OpenAI ready)
-- 📊 Clean, modern Streamlit UI
+This app finds CRISPR gRNAs, predicts activity, analyzes off-targets, simulates protein impact—including indels—and connects to AI for edit explanations.
 
- Features
-- gRNA design with Cas9/Cas12a and PAM selection
-- Protein knockout simulation & sequence diff
-- Off-target hit scanning for any background DNA
-- Visualization of guides on DNA
-- Downloadable results and logs
-- Modular, clean codebase (easy to extend for bio/AI pros)
+## Features
+- gRNA discovery (Cas9/Cas12a, custom PAM/GC)
+- Activity scoring
+- Detailed off-target mapping
+- Protein simulation (robust, codon-correct)
+- Bulk indel simulation
+- AI edit explanation tab (Gemini/OpenAI ready)
+- Downloadable tables and reports
 
-Quick Start
-1. **Install requirements**
-   ```bash
-   pip install -r requirements.txt
+## To run:
+```bash
+pip install -r requirements.txt
+streamlit run app.py
