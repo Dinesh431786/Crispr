@@ -51,7 +51,7 @@ Higher = best chance of experimental success.
 """
 
 st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
-st.title("🧬 CRISPR Lab NextGen – gRNA Designer & Impact Analyzer")
+st.title("🧬 ("CRISPR Guide RNA Designer")")
 st.markdown(SCORE_SUMMARY)  # Only shown ONCE, here
 
 # ---- Sidebar ----
