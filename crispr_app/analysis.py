@@ -2,31 +2,20 @@ from Bio.Seq import Seq
 from difflib import Differ
 import pandas as pd
 
-def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70):
-    sequence = dna_seq.upper().replace("\n", "").replace(" ", "")
-    pam_len = len(pam)
-    guides = []
-    # Forward
-    for i in range(len(sequence) - guide_length - pam_len + 1):
-        guide = sequence[i:i+guide_length]
-        pam_seq = sequence[i+guide_length:i+guide_length+pam_len]
-        if check_pam(pam_seq, pam):
-            gc = (guide.count('G') + guide.count('C')) / guide_length * 100
-            if min_gc <= gc <= max_gc and "TTTT" not in guide:
-                guides.append({"Strand": "+", "Start": i, "gRNA": guide, "PAM": pam_seq, "GC%": round(gc,2)})
-    # Reverse
-    rc_sequence = str(Seq(sequence).reverse_complement())
-    for i in range(len(rc_sequence) - guide_length - pam_len + 1):
-        guide = rc_sequence[i:i+guide_length]
-        pam_seq = rc_sequence[i+guide_length:i+guide_length+pam_len]
-        if check_pam(pam_seq, pam):
-            gc = (guide.count('G') + guide.count('C')) / guide_length * 100
-            if min_gc <= gc <= max_gc and "TTTT" not in guide:
-                guides.append({"Strand": "-", "Start": len(sequence)-i-guide_length-pam_len, "gRNA": guide, "PAM": pam_seq, "GC%": round(gc,2)})
-    return pd.DataFrame(guides)
+def score_guide(guide):
+    gc = (guide.count('G') + guide.count('C')) / len(guide)
+    score = 1.0
+    if gc < 0.4 or gc > 0.7:
+        score -= 0.25
+    if "TTTT" in guide or "GGGG" in guide:
+        score -= 0.2
+    if guide[-1] == "G":
+        score += 0.1
+    if guide[0] == "T":
+        score -= 0.1
+    return round(max(score, 0.0), 2)
 
 def check_pam(pam_seq, pam):
-    # Supports NGG, NAG, TTTV (V = A/C/G)
     if pam == "NGG":
         return pam_seq[1:] == "GG"
     elif pam == "NAG":
@@ -35,23 +24,78 @@ def check_pam(pam_seq, pam):
         return pam_seq[:3] == "TTT" and pam_seq[3] in "ACG"
     return False
 
-def find_off_targets(guides, background_seq, max_mismatches=2):
+def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70):
+    sequence = dna_seq.upper().replace("\n", "").replace(" ", "")
+    pam_len = len(pam)
+    guides = []
+    for i in range(len(sequence) - guide_length - pam_len + 1):
+        guide = sequence[i:i+guide_length]
+        pam_seq = sequence[i+guide_length:i+guide_length+pam_len]
+        if check_pam(pam_seq, pam):
+            gc = (guide.count('G') + guide.count('C')) / guide_length * 100
+            if min_gc <= gc <= max_gc and "TTTT" not in guide:
+                guides.append({
+                    "Strand": "+",
+                    "Start": i,
+                    "gRNA": guide,
+                    "PAM": pam_seq,
+                    "GC%": round(gc,2),
+                    "ActivityScore": score_guide(guide)
+                })
+    rc_sequence = str(Seq(sequence).reverse_complement())
+    for i in range(len(rc_sequence) - guide_length - pam_len + 1):
+        guide = rc_sequence[i:i+guide_length]
+        pam_seq = rc_sequence[i+guide_length:i+guide_length+pam_len]
+        if check_pam(pam_seq, pam):
+            gc = (guide.count('G') + guide.count('C')) / guide_length * 100
+            if min_gc <= gc <= max_gc and "TTTT" not in guide:
+                guides.append({
+                    "Strand": "-",
+                    "Start": len(sequence)-i-guide_length-pam_len,
+                    "gRNA": guide,
+                    "PAM": pam_seq,
+                    "GC%": round(gc,2),
+                    "ActivityScore": score_guide(guide)
+                })
+    return pd.DataFrame(guides)
+
+def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
     results = []
     bg_seq = background_seq.upper().replace('\n', '')[:1_000_000]
     for _, row in guides.iterrows():
         guide = row["gRNA"]
-        matches = []
+        details = []
         for i in range(len(bg_seq) - len(guide) + 1):
             window = bg_seq[i:i+len(guide)]
             mismatches = sum(1 for a, b in zip(guide, window) if a != b)
             if mismatches <= max_mismatches:
-                matches.append((i, mismatches))
+                details.append({
+                    "Position": i,
+                    "Mismatches": mismatches,
+                    "Sequence": window
+                })
         results.append({
             "gRNA": guide,
-            "OffTargetHits": len(matches),
-            "BestMismatch": min([m[1] for m in matches]) if matches else None
+            "OffTargetCount": len(details),
+            "Details": details
         })
-    return pd.DataFrame(results)
+    # Flatten to a detailed dataframe for Streamlit
+    flat = []
+    for result in results:
+        for detail in result["Details"]:
+            flat.append({
+                "gRNA": result["gRNA"],
+                "OffTargetPos": detail["Position"],
+                "Mismatches": detail["Mismatches"],
+                "TargetSeq": detail["Sequence"]
+            })
+    return pd.DataFrame(flat)
+
+def safe_translate(seq):
+    extra = len(seq) % 3
+    if extra != 0:
+        seq += "N" * (3 - extra)
+    return str(Seq(seq).translate(to_stop=True))
 
 def simulate_protein_edit(seq, cut_index, edit_type="del1", insert_base="A", sub_from="A", sub_to="T"):
     seq = seq.upper().replace('\n', '').replace(' ', '')
@@ -71,8 +115,8 @@ def simulate_protein_edit(seq, cut_index, edit_type="del1", insert_base="A", sub
         if cut_index + len(sub_from) <= len(seq):
             after = seq[:cut_index] + sub_to + seq[cut_index+len(sub_from):]
     try:
-        prot_before = str(Seq(before).translate(to_stop=True))
-        prot_after = str(Seq(after).translate(to_stop=True))
+        prot_before = safe_translate(before)
+        prot_after = safe_translate(after)
     except Exception:
         prot_before = prot_after = "Translation failed"
     stop_lost = "*" in prot_after and "*" not in prot_before
@@ -92,3 +136,27 @@ def diff_proteins(before, after):
         else:
             result.append(s)
     return ''.join(result)
+
+def indel_simulations(seq, cut_index):
+    # Simulate −3, −2, −1, +1, +2, +3 edits
+    results = []
+    for n in [1,2,3]:
+        # Deletions
+        del_seq = seq[:cut_index] + seq[cut_index+n:]
+        del_prot = safe_translate(del_seq)
+        del_fs = (len(del_seq)%3 != 0)
+        results.append({
+            "Edit": f"del{n}",
+            "Protein": del_prot,
+            "Frameshift": del_fs
+        })
+        # Insertions (A)
+        ins_seq = seq[:cut_index] + ("A"*n) + seq[cut_index:]
+        ins_prot = safe_translate(ins_seq)
+        ins_fs = (len(ins_seq)%3 != 0)
+        results.append({
+            "Edit": f"ins{n}",
+            "Protein": ins_prot,
+            "Frameshift": ins_fs
+        })
+    return pd.DataFrame(results)
