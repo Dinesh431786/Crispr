@@ -37,6 +37,9 @@ with st.sidebar:
     bg_seq = st.text_area("Background DNA (for off-target)", height=100)
     max_mismatches = st.slider("Max Mismatches (Off-target)", 0, 4, 2)
 
+if "ai_response" not in st.session_state:
+    st.session_state.ai_response = ""
+
 if st.button("🔍 Find gRNAs"):
     valid, msg = validate_sequence(dna_seq)
     if not valid:
@@ -109,13 +112,17 @@ Premature Stop Codon: {'Yes' if stop else 'No'}
             with tab3:
                 gRNA_list = df["gRNA"].tolist()
                 gRNA_choice = gRNA_list[0] if gRNA_list else ""
-                ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"])
-                api_key = st.text_input("AI API Key", type="password")
-                gene_info = st.text_area("Describe the edit context", value=f"Editing at {gRNA_choice}")
-                ask_ai = st.button("Ask AI")
-                if ask_ai:
-                    with st.spinner("Connecting to AI..."):
-                        st.info("This would connect to your Gemini/OpenAI API. (Demo mode in this version.)")
+                ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend")
+                api_key = st.text_input("AI API Key", type="password", key="ai_api_key")
+                gene_info = st.text_area("Describe the edit context", value=f"Editing at {gRNA_choice}", key="gene_info")
+                
+                if st.button("Ask AI", key="ask_ai_button"):
+                    # Replace this with a real API call if needed
+                    st.session_state.ai_response = f"Edit context for {gRNA_choice}: {gene_info} (AI explanation would appear here.)"
+                
+                # Always show the response if it exists
+                if st.session_state.ai_response:
+                    st.info(st.session_state.ai_response)
                 else:
                     st.caption("Enter key and click 'Ask AI' for real-time explanation.")
 
