@@ -24,7 +24,9 @@ def hybrid_score(guide, off_target_count=0):
     if guide[-1] == "G":
         score += 0.05
     score -= 0.05 * off_target_count
-    return round(max(score, 0.0), 3)
+    score = max(score, 0.0)
+    score = min(score, 1.0)  # Cap at 1.0
+    return round(score, 3)
 
 def ml_gRNA_score(guide):
     """
@@ -53,7 +55,8 @@ def ml_gRNA_score(guide):
         score += 0.05
     if guide[0] == "T":
         score -= 0.05
-    return round(max(0.0, min(score, 1.0)), 3)
+    score = max(0.0, min(score, 1.0))  # Clamp between 0.0 and 1.0
+    return round(score, 3)
 
 def check_pam(pam_seq, pam):
     if pam == "NGG":
