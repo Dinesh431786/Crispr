@@ -52,7 +52,7 @@ Higher = best chance of experimental success.
 
 st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
 st.title("🧬 CRISPR Lab NextGen – gRNA Designer & Impact Analyzer")
-st.markdown(SCORE_SUMMARY)
+st.markdown(SCORE_SUMMARY)  # Only shown ONCE, here
 
 # ---- Sidebar ----
 with st.sidebar:
@@ -211,7 +211,6 @@ if st.button("📄 Generate Gemini Report"):
             st.session_state.gemini_report = "API error:\n" + traceback.format_exc(limit=2)
 
 if st.session_state.gemini_report:
-    st.markdown(SCORE_SUMMARY)
     st.subheader("Gemini AI Report")
     st.info(st.session_state.gemini_report)
 
@@ -306,8 +305,6 @@ with tab_sim:
 with tab_ai:
     st.header("AI Explain (Gemini / OpenAI)")
     context_parts = [
-        SCORE_SUMMARY,
-        "### Score Logic Explanation (for AI only)\n",
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
         df[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
@@ -371,7 +368,6 @@ with tab_ai:
                 import traceback
                 st.session_state.ai_response = "API error:\n" + traceback.format_exc(limit=2)
     if st.session_state.ai_response:
-        st.markdown(SCORE_SUMMARY)
         st.info(st.session_state.ai_response)
 
 with tab_vis:
