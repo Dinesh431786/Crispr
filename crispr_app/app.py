@@ -50,7 +50,7 @@ Averages both lab rules and ML predictions for a balanced rank.
 Higher = best chance of experimental success.
 """
 
-st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
+st.set_page_config(page_title="🧬 CRISPR Guide RNA Designer", layout="wide")
 st.title("🧬 CRISPR Guide RNA Designer")
 st.markdown(SCORE_SUMMARY)  # Only shown ONCE, here
 
