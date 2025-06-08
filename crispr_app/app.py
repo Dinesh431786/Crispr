@@ -4,6 +4,7 @@ from utils import (
     validate_sequence,
     load_fasta,
     visualize_guide_location,
+    plot_protein_domains
 )
 from analysis import (
     find_gRNAs,
@@ -11,15 +12,15 @@ from analysis import (
     simulate_protein_edit,
     diff_proteins,
     indel_simulations,
-    consensus_guide_score,
+    hybrid_score,
     annotate_protein_domains,
 )
 import datetime
 
 st.set_page_config(page_title="🧬 CRISPR Lab NextGen", layout="wide")
-st.title("🧬 CRISPR Lab NextGen – Advanced gRNA Designer & Analyzer")
+st.title("🧬 CRISPR Lab NextGen – Innovative gRNA Designer & Analyzer")
 
-# Sidebar
+# Sidebar – Input
 with st.sidebar:
     st.header("🧬 Sequence Input")
     uploaded = st.file_uploader("Upload .fasta", type=["fasta", "fa", "txt"])
@@ -39,24 +40,17 @@ with st.sidebar:
     bg_seq = st.text_area("Background DNA (off-target, optional)", height=100, key="bg_seq")
     max_mm = st.slider("Max mismatches", 0, 4, 2, key="max_mm")
     edit_offset = st.slider(
-        "Edit offset from PAM",
-        0, guide_len, guide_len,
-        key="edit_offset",
+        "Edit offset from PAM", 0, guide_len, guide_len, key="edit_offset",
         help="Cas9 cut ≈ 3 bp upstream of PAM; set as needed."
     )
 
-    st.header("🤖 AI Assistant")
-    st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend")
-    st.text_input("API Key", type="password", key="api_key")
-    if st.session_state.get("api_key") and len(st.session_state["api_key"].strip()) > 10:
-        st.success(f"{st.session_state['ai_backend']} API initialized!")
-
 for k in (
     "df_guides", "offtargets", "guide_scores", "selected_gRNA", "selected_edit",
-    "sim_result", "sim_indel", "ai_response", "protein_domains"
+    "sim_result", "sim_indel", "protein_domains", "offtarget_counts", "domain_penalties"
 ):
     st.session_state.setdefault(k, None)
 
+# gRNA search
 if st.button("🔍 Find gRNAs"):
     ok, seq_or_msg = validate_sequence(dna_seq)
     if not ok:
@@ -65,12 +59,51 @@ if st.button("🔍 Find gRNAs"):
     else:
         with st.spinner("Searching gRNAs…"):
             guides = find_gRNAs(seq_or_msg, pam, guide_len, min_gc, max_gc)
-            if not guides.empty:
-                guides["ConsensusScore"] = guides["gRNA"].apply(consensus_guide_score)
+            guides["OffTargetCount"] = 0
+            guides["DomainPenalty"] = 0.0
+            guides["HybridScore"] = 0.0
+            st.session_state.offtarget_counts = {}
+            st.session_state.domain_penalties = {}
+
+            # If off-target bg provided, scan all guides for off-target hits
+            if bg_seq and len(bg_seq.strip()) >= guide_len + 3:
+                off_targets_df = find_off_targets_detailed(guides, bg_seq, max_mm)
+                st.session_state.offtargets = off_targets_df
+                for g in guides.gRNA:
+                    count = len(off_targets_df[off_targets_df.gRNA == g])
+                    guides.loc[guides.gRNA == g, "OffTargetCount"] = count
+                    st.session_state.offtarget_counts[g] = count
+            else:
+                st.session_state.offtargets = None
+
+            # Protein domain penalty: simulate cut and penalize if it disrupts a domain
+            prot = None
+            domain_df = None
+            if len(guides) > 0:
+                prot = simulate_protein_edit(seq_or_msg, 0)[0]  # Translate whole CDS (approx)
+                domain_df = annotate_protein_domains(seq_or_msg)
+                st.session_state.protein_domains = domain_df
+                for idx, row in guides.iterrows():
+                    cut_pos = row["Start"] + edit_offset
+                    domain_penalty = 0.0
+                    if domain_df is not None and not domain_df.empty and cut_pos:
+                        for _, d in domain_df.iterrows():
+                            # If cut is within a domain, penalize
+                            if d["StartAA"] <= cut_pos//3 <= d["EndAA"]:
+                                domain_penalty = 1.0
+                    guides.at[idx, "DomainPenalty"] = domain_penalty
+                    st.session_state.domain_penalties[row["gRNA"]] = domain_penalty
+
+            # Now score all guides using true hybrid logic
+            for idx, row in guides.iterrows():
+                guides.at[idx, "HybridScore"] = hybrid_score(
+                    row["gRNA"],
+                    off_target_count=row["OffTargetCount"],
+                    domain_penalty=row["DomainPenalty"]
+                )
             st.session_state.df_guides = guides
         st.session_state.update(
-            offtargets=None, guide_scores=None, sim_result=None, sim_indel=None,
-            ai_response="", protein_domains=None,
+            guide_scores=None, sim_result=None, sim_indel=None,
         )
 
 df = st.session_state.df_guides
@@ -78,48 +111,29 @@ if df is None or df.empty:
     st.info("Paste DNA & click **Find gRNAs** to begin.")
     st.stop()
 
-st.success(f"✅ {len(df)} gRNAs found. Showing best scoring guides at top.")
-st.dataframe(df.sort_values("ConsensusScore", ascending=False), use_container_width=True)
+st.success(f"✅ {len(df)} gRNAs found. Showing top-scoring guides.")
+st.dataframe(
+    df.sort_values("HybridScore", ascending=False),
+    use_container_width=True,
+    hide_index=True
+)
 st.download_button("⬇️ Download gRNAs CSV", df.to_csv(index=False), "guides.csv")
 
-tab_ot, tab_sim, tab_ai, tab_vis, tab_rank, tab_report = st.tabs(
-    ["Off-targets", "Simulation & Indel", "AI Explain", "Visualization", "Ranking", "Project Report"]
+tab_ot, tab_sim, tab_vis, tab_rank, tab_report = st.tabs(
+    ["Off-targets", "Simulation & Indel", "Visualization", "Ranking", "Project Report"]
 )
 
 with tab_ot:
-    if not bg_seq.strip():
-        st.info("Provide background DNA in sidebar for off-target scanning.")
+    if st.session_state.offtargets is None or st.session_state.offtargets.empty:
+        st.info("No off-targets or background DNA provided.")
     else:
-        if st.button("Scan off-targets"):
-            st.session_state.offtargets = find_off_targets_detailed(df, bg_seq, max_mm)
-            scores = {
-                g: round(
-                    1.0
-                    if st.session_state.offtargets[
-                        st.session_state.offtargets.gRNA == g
-                    ].empty
-                    else 1.0 / (
-                        1 + st.session_state.offtargets[
-                            st.session_state.offtargets.gRNA == g
-                        ].Mismatches.sum()
-                    ),
-                    3,
-                )
-                for g in df.gRNA
-            }
-            st.session_state.guide_scores = scores
-        if st.session_state.offtargets is not None:
-            if st.session_state.offtargets.empty:
-                st.info("No off-targets within given mismatches.")
-            else:
-                st.dataframe(st.session_state.offtargets, use_container_width=True)
-                st.download_button(
-                    "⬇️ Download off-targets",
-                    st.session_state.offtargets.to_csv(index=False),
-                    "offtargets.csv",
-                )
+        st.dataframe(st.session_state.offtargets, use_container_width=True)
+        st.download_button(
+            "⬇️ Download off-targets",
+            st.session_state.offtargets.to_csv(index=False),
+            "offtargets.csv"
+        )
 
-# ----- EDIT TYPES: Real mapping -----
 EDIT_TYPES = {
     "Delete 1 bp": "del1",
     "Insert A": "insA",
@@ -166,81 +180,15 @@ with tab_sim:
         st.subheader("±1–3 bp indel simulation")
         st.dataframe(st.session_state.sim_indel, use_container_width=True)
     if st.session_state.protein_domains is not None:
-        st.subheader("Protein Domain Annotation")
+        st.subheader("Protein Domain Annotation (local, real)")
         st.dataframe(st.session_state.protein_domains)
-
-with tab_ai:
-    selected_gRNA = st.session_state.get("selected_gRNA", "")
-    specificity = (
-        st.session_state.guide_scores.get(selected_gRNA)
-        if st.session_state.guide_scores and selected_gRNA else None
-    )
-    edit_type = st.session_state.get("selected_edit", "")
-    sim_result = st.session_state.get("sim_result")
-    dna_excerpt = dna_seq
-
-    context_lines = []
-    if selected_gRNA:
-        context_lines.append(
-            f"I have designed a CRISPR gRNA ({selected_gRNA}) in the following DNA sequence:"
-        )
-        context_lines.append(dna_excerpt)
-    if specificity is not None:
-        context_lines.append(f"The specificity score is {specificity}.")
-    if edit_type:
-        context_lines.append(f"Planned edit type: {edit_type}.")
-    if sim_result:
-        before, after, fs, stop = sim_result
-        context_lines.append(f"Protein before: {before}")
-        context_lines.append(f"Protein after: {after}")
-        context_lines.append(f"Frameshift: {fs} | Premature stop: {stop}")
-    context_lines.append("What is the likely biological effect and are there any CRISPR risks or off-target concerns?")
-
-    default_ctx = "\n".join(context_lines) if context_lines else "Describe your CRISPR edit context here."
-
-    ctx = st.text_area(
-        "Describe the edit context (auto-filled, you can edit):",
-        value=default_ctx,
-        key="ai_ctx"
-    )
-
-    if st.button("Ask AI"):
-        key = st.session_state.get("api_key")
-        if not key or len(key.strip()) < 10:
-            st.error("Enter a valid API key in sidebar.")
-        else:
-            try:
-                if st.session_state.get("ai_backend") == "Gemini":
-                    import google.generativeai as genai
-
-                    genai.configure(api_key=key)
-                    model = genai.GenerativeModel(
-                        model_name="models/gemini-1.5-flash-latest"
-                    )
-                    response = model.generate_content(ctx)
-                    st.session_state.ai_response = (
-                        response.text if hasattr(response, "text") else str(response)
-                    )
-                else:  # OpenAI
-                    import openai
-
-                    openai.api_key = key
-                    resp = openai.ChatCompletion.create(
-                        model="gpt-3.5-turbo",
-                        messages=[
-                            {"role": "system", "content": "You are a bioinformatics expert."},
-                            {"role": "user", "content": ctx},
-                        ],
-                    )
-                    st.session_state.ai_response = resp.choices[0].message.content
-            except Exception as e:
-                import traceback
-
-                st.session_state.ai_response = (
-                    "API error:\n" + traceback.format_exc(limit=2)
-                )
-    if st.session_state.ai_response:
-        st.info(st.session_state.ai_response)
+        # Show domain/cut viz
+        if not st.session_state.protein_domains.empty:
+            cut_aa = idx // 3 if idx else 0
+            fig = plot_protein_domains(
+                before, st.session_state.protein_domains, cut_aa
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
 with tab_vis:
     idx = dna_seq.upper().find(st.session_state.selected_gRNA)
@@ -255,29 +203,24 @@ with tab_vis:
         st.info("gRNA not found for visualization.")
 
 with tab_rank:
-    if st.session_state.guide_scores:
+    if "HybridScore" in df.columns:
         rank_df = (
-            pd.DataFrame(
-                [
-                    {"gRNA": g, "Specificity": s}
-                    for g, s in st.session_state.guide_scores.items()
-                ]
-            )
-            .sort_values("Specificity", ascending=False)
+            df[["gRNA", "HybridScore", "OffTargetCount", "DomainPenalty"]]
+            .sort_values("HybridScore", ascending=False)
             .reset_index(drop=True)
         )
         st.dataframe(rank_df, use_container_width=True)
     else:
-        st.info("Run off-target scan to get specificity ranking.")
+        st.info("Run gRNA search to get ranking.")
 
 with tab_report:
     st.header("📝 Project Report & Export")
     st.markdown(f"**Date:** {datetime.date.today()}")
     st.markdown("**Guide Table**")
     st.dataframe(df, use_container_width=True)
-    st.markdown("**AI Summary**")
-    if st.session_state.ai_response:
-        st.info(st.session_state.ai_response)
+    st.markdown("**Protein Domains**")
+    if st.session_state.protein_domains is not None:
+        st.dataframe(st.session_state.protein_domains)
     st.download_button(
         "Download gRNA Table (CSV)",
         df.to_csv(index=False),
