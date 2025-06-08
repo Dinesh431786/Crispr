@@ -130,10 +130,18 @@ if df is None or df.empty:
     st.info("Paste DNA & click **Find gRNAs** to begin.")
     st.stop()
 
+# --- Calculate scores (always capped at 1.0) ---
 if "HybridScore" not in df.columns or "MLScore" not in df.columns or "ConsensusScore" not in df.columns:
     df["HybridScore"] = [hybrid_score(g) for g in df.gRNA]
     df["MLScore"] = [ml_gRNA_score(g) for g in df.gRNA]
-    df["ConsensusScore"] = (df["HybridScore"] + df["MLScore"]) / 2
+    df["ConsensusScore"] = ((df["HybridScore"] + df["MLScore"]) / 2).clip(upper=1.0)
+
+# --- Add OffTargetCount (after off-target scan) ---
+if st.session_state.offtargets is not None and not st.session_state.offtargets.empty:
+    ot_counts = st.session_state.offtargets.groupby("gRNA").size().to_dict()
+    df["OffTargetCount"] = df["gRNA"].map(ot_counts).fillna(0).astype(int)
+else:
+    df["OffTargetCount"] = 0
 
 st.success(f"✅ {len(df)} gRNAs found")
 st.dataframe(df, use_container_width=True)
@@ -148,7 +156,7 @@ def build_gemini_prompt():
         "### Score Logic Explanation (for AI only)\n",
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
-        df[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
+        df[["gRNA", "HybridScore", "MLScore", "ConsensusScore", "OffTargetCount"]].head(10).to_csv(sep="|", index=False),
     ]
     ot_df = st.session_state.offtargets
     if ot_df is not None and not ot_df.empty:
@@ -289,104 +297,4 @@ with tab_sim:
     if st.session_state.sim_result:
         before, after, fs, stop = st.session_state.sim_result
         st.markdown(f"**Before protein:** `{before}`")
-        st.markdown(f"**After protein:** `{after}`")
-        st.markdown(f"**Diff:** {diff_proteins(before, after)}")
-        st.write("Frameshift:", fs, "| Premature stop:", stop)
-    if st.session_state.sim_indel is not None:
-        st.subheader("±1–3 bp indel simulation")
-        st.dataframe(st.session_state.sim_indel, use_container_width=True)
-
-with tab_ai:
-    st.header("AI Explain (Gemini / OpenAI)")
-    context_parts = [
-        SCORE_SUMMARY,
-        "### Score Logic Explanation (for AI only)\n",
-        SCORE_EXPLAIN,
-        "\n\n### gRNA Candidates Table (top 10 shown)\n",
-        df[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
-    ]
-    ot_df = st.session_state.offtargets
-    if ot_df is not None and not ot_df.empty:
-        off_target_summary = ot_df.groupby("gRNA")["Mismatches"].count().reset_index()
-        context_parts.append("\n\n### Off-target Summary\n")
-        context_parts.append(off_target_summary.to_csv(sep="|", index=False))
-    sim_res = st.session_state.sim_result
-    if sim_res:
-        before, after, fs, stop = sim_res
-        context_parts.append("\n\n### Simulation Result\n")
-        context_parts.append(f"Before protein: {before}\n")
-        context_parts.append(f"After protein: {after}\n")
-        context_parts.append(f"Frameshift: {fs} | Premature stop: {stop}\n")
-    context_str = "\n".join(context_parts)
-    with st.expander("🔎 See full context sent to AI (for debugging)", expanded=False):
-        st.code(context_str)
-    user_notes = st.text_area(
-        "Add any specific questions or notes for AI (optional):", 
-        "", 
-        key="ai_notes"
-    )
-    prompt = (
-        context_str
-        + "\n\n"
-        + (user_notes.strip() if user_notes else "")
-        + "\n\nSummarize the above results for a CRISPR scientist, highlighting: "
-          "1. Which guides have the highest reliability and why. "
-          "2. Any off-target risks. "
-          "3. Editing simulation impact. "
-          "4. Additional tips for experiment design."
-    )
-    if st.button("Ask AI"):
-        ai_backend = st.session_state.get("ai_backend_sidebar", "Gemini")
-        api_key = st.session_state.get("api_key_sidebar", "")
-        gemini_model = st.session_state.get("gemini_model_sidebar", "gemini-1.5-flash-latest")
-        if not api_key or len(api_key.strip()) < 10:
-            st.error("Enter a valid API key in the sidebar.")
-        else:
-            try:
-                if ai_backend == "Gemini":
-                    import google.generativeai as genai
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel(gemini_model)
-                    result = model.generate_content(prompt)
-                    st.session_state.ai_response = result.text if hasattr(result, "text") else str(result)
-                else:
-                    import openai
-                    openai.api_key = api_key
-                    resp = openai.ChatCompletion.create(
-                        model="gpt-3.5-turbo",
-                        messages=[
-                            {"role": "system", "content": "You are a CRISPR genome editing expert."},
-                            {"role": "user", "content": prompt},
-                        ],
-                    )
-                    st.session_state.ai_response = resp.choices[0].message.content
-            except Exception as e:
-                import traceback
-                st.session_state.ai_response = "API error:\n" + traceback.format_exc(limit=2)
-    if st.session_state.ai_response:
-        st.markdown(SCORE_SUMMARY)
-        st.info(st.session_state.ai_response)
-
-with tab_vis:
-    idx = dna_seq.upper().find(st.session_state.selected_gRNA)
-    if idx != -1:
-        ax = visualize_guide_location(dna_seq, st.session_state.selected_gRNA, idx)
-        st.pyplot(ax.figure)
-    else:
-        st.info("gRNA not found for visualization.")
-
-with tab_rank:
-    if st.session_state.guide_scores:
-        rank_df = (
-            pd.DataFrame(
-                [
-                    {"gRNA": g, "Specificity": s}
-                    for g, s in st.session_state.guide_scores.items()
-                ]
-            )
-            .sort_values("Specificity", ascending=False)
-            .reset_index(drop=True)
-        )
-        st.dataframe(rank_df, use_container_width=True)
-    else:
-        st.info("Run off-target scan to get specificity ranking.")
+        st
