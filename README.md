@@ -1,97 +1,104 @@
+# 🧬 CRISPR Guide RNA Designer
 
-🧬 CRISPR Guide RNA Designer
+A **fast, user-friendly web app** for designing, scoring, and analyzing CRISPR guide RNAs (gRNAs) — **no coding required**.
 
-A fast, user-friendly web app for designing, scoring, and analyzing CRISPR guide RNAs (gRNAs).
+---
 
-🚀 Try It Now 👉 Launch the app on Streamlit 👈
+## 🚀 Try It Now
 
+- [Launch the app on Streamlit](https://crispr-voxelta.streamlit.app/)  
+- **Free. Open source. No login required.**
 
-🎯 Unique Features & USP
+---
 
-Simple: Paste a DNA sequence or upload a FASTA file—no coding or setup required.
+## 🎯 Unique Features
 
-Smart Scoring: Each guide is scored with both lab rules and data-inspired heuristics (Hybrid, ML-inspired, and Consensus scores).
+- **Zero setup:** Paste a DNA sequence or upload a FASTA file
+- **Multiple PAMs:** Cas9 (NGG, NAG) & Cas12a (TTTV) supported
+- **Hybrid & ML-inspired scoring:** Rule-based plus data-inspired consensus
+- **Off-target scan:** Use any DNA as a custom background to spot risk sites
+- **U6 promoter toggle:** One-click “add G at 5’” for U6/T7 promoters
+- **Indel/protein simulation:** Visualize the effect of edits
+- **AI reporting:** One-click Gemini/OpenAI-powered gRNA summaries
+- **Download results:** CSV export for guides and off-targets
+- **Modern UX:** Streamlit-based, works on desktop & mobile
+- **MIT Licensed:** Use, share, fork, or modify
 
-Off-Target Awareness: Scan your custom background DNA for potential off-targets.
+---
 
-AI Summary: One-click Gemini/OpenAI-powered guide report.
+## 👥 Who is this for?
 
-Free & Open Source: Use, share, or modify—no restrictions.
+- Molecular, plant, or biomedical researchers
+- Academic labs and classroom use
+- Biotech & R&D teams (fast pilot CRISPR projects)
+- Students, DIY bio, and open-science community
 
+---
 
-👥 Who is this for? (ICP)
+## 🛠️ How to Use
 
-Molecular biology, plant, and biomedical researchers
+1. **Open the app** (see link above)
+2. **Paste DNA** or **upload FASTA**
+3. **Select PAM/parameters** in the sidebar
+4. *(Optional)* Toggle **U6 Promoter** for gRNA with 5' G
+5. Click **Find gRNAs**
+6. Review and **download results**
+7. *(Optional)* Paste background DNA to scan off-targets
+8. *(Optional)* Run indel/protein simulation or AI-powered report
 
-Academic labs and teaching settings
+---
 
-Biotech startups and R&D teams
+## 📊 Scoring Methodology
 
-Students, beginners, and DIY bio enthusiasts
+**Hybrid Score**: Based on established lab rules (GC content, homopolymers, seed region, off-target penalty, terminal base).  
+**ML-inspired Score**: Derived from features found in ML studies of gRNA efficacy (but not a trained ML model).  
+**Consensus Score**: Balanced average of the two for ranking.
 
+> **Note:** Scores help prioritize guides, but do not replace experimental validation.
 
+---
 
-🛠️ How to Use
+## 📝 Installation (For Local Use)
 
-1. Open the Streamlit app.
-
-2. Paste your DNA sequence or upload a FASTA file.
-
-3. Set CRISPR/PAM parameters as needed.
-
-4. Click Find gRNAs to view candidate guides.
-
-5. Review scores and download your results.
-
-6. (Optional) Provide background DNA to scan for off-targets.
-
-7. (Optional) Simulate edits or request an AI-powered summary.
-
-
-📊 Scoring Methodology
-
-Our gRNA scoring combines rule-based and machine learning-inspired approaches to prioritize reliable guides:
-
-Hybrid Score (Rule-based):
-Calculated from biochemical rules including GC content (optimal 40–70%), homopolymer avoidance, seed region composition, off-target penalties, and terminal base preferences. These are grounded in established CRISPR research and provide interpretable, experimentally validated guidance.
-
-ML-inspired Score:
-Based on features identified in large CRISPR screening datasets using machine learning. Although no trained ML model is directly used here, this score mimics key predictive factors like nucleotide composition and positional effects derived from published studies.
-
-Consensus Score:
-The average of Hybrid and ML-inspired scores, offering a balanced metric that combines experimental rules with data-driven insights for better guide prioritization.
-
-
-> Note: These scores assist in guide selection but do not replace experimental validation, which is essential for confirming guide efficiency and specificity.
-
-
-📝 Installation (for local use)
-
+```bash
 git clone https://github.com/Dinesh431786/Crispr.git
 cd crispr/crispr_app
 pip install -r requirements.txt
 streamlit run app.py
 
-🔑 License
+🔑 AI API Keys
+Gemini (Google): Get API key
 
-MIT License – Free for all use.
+OpenAI: Get API key
 
+Paste your key in the app sidebar for AI-powered explanations.
+
+🧪 Example FASTA
+fasta
+Copy
+Edit
+>TestGene
+ATGAGTCTGCTCTTCGCGTTGGAGTGAAATCTGAGATGATGGGTTGAAATCGCAGTTCGACCTGAACTTTTATCTGCTCTTCGCGTTGAGCGGACCGTGGGAAGTTTCGCGTTGATCAGTTCTTCTGCTCTTCGCGTTTAAGCCTTGCGTTGTTTATCTGCTCTTCGCGTTTATCAGCCTGGGCGTTGATCTTTTATCTGCTCTTCGCGTTAACGGAAGCCGG
 🙋 FAQ
+Is it free?
+Yes, open source and free for all.
 
-Is this tool free to use?
-Yes, it’s open source and free for all users.
+Does it use real ML?
+No, scoring is based on published ML findings but is rule-based.
 
-Does this use actual machine learning?
-No, scores are rule-based and inspired by ML findings, not derived from trained models.
+Species?
+Works for any DNA (human, plant, animal, microbe, synthetic).
 
-Is this suitable for crops/animals/bacteria?
-Yes, it works for any DNA input, but always validate experimentally.
+AI required?
+All core features work without AI. AI summary is optional with API key.
 
 🤝 Contributing
-
-Pull requests, suggestions, and issue reports are welcome! See CONTRIBUTING.md for guidelines.
+Pull requests, feedback, and bug reports welcome!
+See CONTRIBUTING.md for details.
 
 👨‍🔬 Author
+Dinesh K — design, code, and documentation
+GitHub
 
-Dinesh K – design, code, and documentation
-
+⚖️ License
+MIT License — free for all use.
