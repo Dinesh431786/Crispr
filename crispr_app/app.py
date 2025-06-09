@@ -73,7 +73,7 @@ with st.sidebar:
     }
     pam = GUIDE_TYPES[pam_label]
 
-    # U6 toggle moved up for better UX
+    # U6 toggle up for better UX
     u6_g_toggle = st.toggle(
         "U6 Promoter (add G at 5’ if needed)", value=False, key="u6_g_toggle",
         help="If ON, adds a leading 'G' to each gRNA if not already present (for U6/T7 promoters)."
@@ -99,7 +99,12 @@ with st.sidebar:
     if ai_backend == "Gemini":
         gemini_model = st.selectbox(
             "Gemini Model",
-            ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest"],
+            [
+                "gemini-1.5-flash-latest",
+                "gemini-1.5-pro-latest",
+                "gemini-pro",
+                "gemini-1.0-pro-latest",
+            ],
             key="gemini_model_sidebar",
         )
     api_key = st.text_input("API Key", type="password", key="api_key_sidebar")
@@ -229,8 +234,15 @@ if st.button("📄 Generate Gemini Report"):
                 )
                 st.session_state.gemini_report = resp.choices[0].message.content
         except Exception as e:
-            import traceback
-            st.session_state.gemini_report = "API error:\n" + traceback.format_exc(limit=2)
+            error_str = str(e)
+            # FRIENDLY Gemini error reporting
+            if "API key not valid" in error_str or "API_KEY_INVALID" in error_str:
+                st.error("❌ Your Gemini API key is invalid or this model is not enabled for your account/project. Please double-check your key and model selection.")
+            elif "model not found" in error_str or "not supported" in error_str:
+                st.error("❌ The selected Gemini model is not available. Try selecting 'gemini-pro' in the sidebar.")
+            else:
+                st.error(f"Gemini API error: {error_str}")
+            st.session_state.gemini_report = ""
 
 if st.session_state.gemini_report:
     st.subheader("Gemini AI Report")
@@ -371,33 +383,33 @@ with tab_ai:
           "4. Additional tips for experiment design."
     )
     if st.button("Ask AI"):
-        ai_backend = st.session_state.get("ai_backend_sidebar", "Gemini")
-        api_key = st.session_state.get("api_key_sidebar", "")
-        gemini_model = st.session_state.get("gemini_model_sidebar", "gemini-1.5-flash-latest")
-        if not api_key or len(api_key.strip()) < 10:
-            st.error("Enter a valid API key in the sidebar.")
-        else:
-            try:
-                if ai_backend == "Gemini":
-                    import google.generativeai as genai
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel(gemini_model)
-                    result = model.generate_content(prompt)
-                    st.session_state.ai_response = result.text if hasattr(result, "text") else str(result)
-                else:
-                    import openai
-                    openai.api_key = api_key
-                    resp = openai.ChatCompletion.create(
-                        model="gpt-3.5-turbo",
-                        messages=[
-                            {"role": "system", "content": "You are a CRISPR genome editing expert."},
-                            {"role": "user", "content": prompt},
-                        ],
-                    )
-                    st.session_state.ai_response = resp.choices[0].message.content
-            except Exception as e:
-                import traceback
-                st.session_state.ai_response = "API error:\n" + traceback.format_exc(limit=2)
+        try:
+            if ai_backend == "Gemini":
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel(gemini_model)
+                result = model.generate_content(prompt)
+                st.session_state.ai_response = result.text if hasattr(result, "text") else str(result)
+            else:
+                import openai
+                openai.api_key = api_key
+                resp = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You are a CRISPR genome editing expert."},
+                        {"role": "user", "content": prompt},
+                    ],
+                )
+                st.session_state.ai_response = resp.choices[0].message.content
+        except Exception as e:
+            error_str = str(e)
+            if "API key not valid" in error_str or "API_KEY_INVALID" in error_str:
+                st.error("❌ Your Gemini API key is invalid or this model is not enabled for your account/project. Please double-check your key and model selection.")
+            elif "model not found" in error_str or "not supported" in error_str:
+                st.error("❌ The selected Gemini model is not available. Try selecting 'gemini-pro' in the sidebar.")
+            else:
+                st.error(f"Gemini API error: {error_str}")
+            st.session_state.ai_response = ""
     if st.session_state.ai_response:
         st.info(st.session_state.ai_response)
 
