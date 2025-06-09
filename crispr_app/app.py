@@ -72,6 +72,13 @@ with st.sidebar:
         "Cas12a TTTV": "TTTV",
     }
     pam = GUIDE_TYPES[pam_label]
+
+    # U6 toggle moved up for better UX
+    u6_g_toggle = st.toggle(
+        "U6 Promoter (add G at 5’ if needed)", value=False, key="u6_g_toggle",
+        help="If ON, adds a leading 'G' to each gRNA if not already present (for U6/T7 promoters)."
+    )
+
     guide_len = st.slider("Guide length", 18, 25, 20, key="guide_len")
     min_gc = st.slider("Min GC %", 30, 60, 40, key="min_gc")
     max_gc = st.slider("Max GC %", 60, 80, 70, key="max_gc")
@@ -84,12 +91,6 @@ with st.sidebar:
         guide_len,
         key="edit_offset",
         help="Cas9 cut ≈ 3 bp upstream of PAM; set as needed.",
-    )
-
-    st.header("Promoter/Expression Settings")
-    u6_g_toggle = st.toggle(
-        "U6 Promoter (add G at 5’ if needed)", value=False, key="u6_g_toggle",
-        help="If ON, adds a leading 'G' to each gRNA if not already present (for U6/T7 promoters)."
     )
 
     st.header("🤖 AI Explain Settings")
@@ -127,16 +128,9 @@ def u6_g_mod(seq):
 def apply_u6_toggle_to_df(df, u6_toggle):
     df_mod = df.copy()
     if u6_toggle:
-        df_mod = df_mod.copy()
-        df_mod["gRNA_U6"] = df_mod.gRNA.apply(u6_g_mod)
-        df_mod_display = df_mod.rename(columns={"gRNA_U6": "gRNA"})
-        df_mod_display["gRNA"] = df_mod_display["gRNA"]
-        # For download and display, only show with U6 "G"
-        show_cols = [c for c in df_mod_display.columns if c != "gRNA"]  # put new gRNA col first
-        show_cols = ["gRNA"] + [c for c in show_cols if c != "gRNA"]
-        return df_mod_display[show_cols]
-    else:
-        return df
+        # Replace the gRNA column in-place (NO duplicate column bug)
+        df_mod["gRNA"] = df_mod["gRNA"].apply(u6_g_mod)
+    return df_mod
 
 if st.button("🔍 Find gRNAs"):
     ok, msg = validate_sequence(dna_seq)
