@@ -51,7 +51,7 @@ Higher = best chance of experimental success.
 
 st.set_page_config(page_title="🧬 CRISPR Guide RNA Designer", layout="wide")
 st.title("🧬 CRISPR Guide RNA Designer")
-st.markdown(SCORE_SUMMARY)
+st.markdown(SCORE_SUMMARY)  # Only shown ONCE, here
 
 # ---- Sidebar ----
 with st.sidebar:
@@ -73,10 +73,6 @@ with st.sidebar:
     }
     pam = GUIDE_TYPES[pam_label]
     guide_len = st.slider("Guide length", 18, 25, 20, key="guide_len")
-    
-    # U6 toggle
-    add_5g = st.toggle("Add 5’ G for U6 promoter compatibility", value=False)
-    
     min_gc = st.slider("Min GC %", 30, 60, 40, key="min_gc")
     max_gc = st.slider("Max GC %", 60, 80, 70, key="max_gc")
     bg_seq = st.text_area("Background DNA (off-target)", height=100, key="bg_seq")
@@ -88,6 +84,12 @@ with st.sidebar:
         guide_len,
         key="edit_offset",
         help="Cas9 cut ≈ 3 bp upstream of PAM; set as needed.",
+    )
+
+    st.header("Promoter/Expression Settings")
+    u6_g_toggle = st.toggle(
+        "U6 Promoter (add G at 5’ if needed)", value=False, key="u6_g_toggle",
+        help="If ON, adds a leading 'G' to each gRNA if not already present (for U6/T7 promoters)."
     )
 
     st.header("🤖 AI Explain Settings")
@@ -116,6 +118,26 @@ for k in (
 ):
     st.session_state.setdefault(k, None)
 
+# Helper: U6 promoter G-adding wrapper
+def u6_g_mod(seq):
+    if seq.startswith("G"):
+        return seq
+    return "G" + seq
+
+def apply_u6_toggle_to_df(df, u6_toggle):
+    df_mod = df.copy()
+    if u6_toggle:
+        df_mod = df_mod.copy()
+        df_mod["gRNA_U6"] = df_mod.gRNA.apply(u6_g_mod)
+        df_mod_display = df_mod.rename(columns={"gRNA_U6": "gRNA"})
+        df_mod_display["gRNA"] = df_mod_display["gRNA"]
+        # For download and display, only show with U6 "G"
+        show_cols = [c for c in df_mod_display.columns if c != "gRNA"]  # put new gRNA col first
+        show_cols = ["gRNA"] + [c for c in show_cols if c != "gRNA"]
+        return df_mod_display[show_cols]
+    else:
+        return df
+
 if st.button("🔍 Find gRNAs"):
     ok, msg = validate_sequence(dna_seq)
     if not ok:
@@ -140,25 +162,17 @@ if df is None or df.empty:
     st.info("Paste DNA & click **Find gRNAs** to begin.")
     st.stop()
 
-# --- Handle U6 5' G toggle ---
-if add_5g:
-    df["display_gRNA"] = df.gRNA.apply(lambda x: x if x.startswith("G") else "G" + x)
-    df["actual_gRNA"] = df.gRNA
-else:
-    df["display_gRNA"] = df.gRNA
-    df["actual_gRNA"] = df.gRNA
-
 if "HybridScore" not in df.columns or "MLScore" not in df.columns or "ConsensusScore" not in df.columns:
     df["HybridScore"] = [hybrid_score(g) for g in df.gRNA]
     df["MLScore"] = [ml_gRNA_score(g) for g in df.gRNA]
     df["ConsensusScore"] = ((df["HybridScore"] + df["MLScore"]) / 2).clip(upper=1.0)
 
-st.success(f"✅ {len(df)} gRNAs found")
-# Show user the display gRNA (with/without G as appropriate)
-to_show = df.copy()
-to_show = to_show.rename(columns={"display_gRNA": "gRNA"})
-st.dataframe(to_show[["gRNA", "PAM", "GC%", "HybridScore", "MLScore", "ConsensusScore"]], use_container_width=True)
-st.download_button("⬇️ Download gRNAs CSV", to_show.to_csv(index=False), "guides.csv")
+u6_toggle = st.session_state.get("u6_g_toggle", False)
+df_display = apply_u6_toggle_to_df(df, u6_toggle)
+
+st.success(f"✅ {len(df_display)} gRNAs found")
+st.dataframe(df_display, use_container_width=True)
+st.download_button("⬇️ Download gRNAs CSV", df_display.to_csv(index=False), "guides.csv")
 
 st.markdown("---")
 st.header("📄 One Click Gemini Report")
@@ -169,7 +183,7 @@ def build_gemini_prompt():
         "### Score Logic Explanation (for AI only)\n",
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
-        to_show[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
+        df_display[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
     ]
     ot_df = st.session_state.offtargets
     if ot_df is not None and not ot_df.empty:
@@ -271,11 +285,19 @@ with tab_ot:
                 )
 
 with tab_sim:
-    g_list = df["display_gRNA"].tolist()
-    # Find corresponding actual gRNA for simulation
-    g_lookup = dict(zip(df["display_gRNA"], df["actual_gRNA"]))
-    sel_display = st.selectbox("gRNA", g_list, key="sel_gRNA")
-    actual = g_lookup[sel_display]
+    # The gRNA display for selection (should show with U6 G if toggle is on)
+    if u6_toggle:
+        g_list_display = [u6_g_mod(g) for g in df.gRNA.tolist()]
+    else:
+        g_list_display = df.gRNA.tolist()
+    gRNA_display_to_seq = {u6_g_mod(g) if u6_toggle else g: g for g in df.gRNA.tolist()}
+
+    st.session_state.selected_gRNA = st.selectbox(
+        "gRNA", g_list_display, key="sel_gRNA"
+    )
+    # Map back to original sequence for all simulations/analysis!
+    gRNA_for_analysis = gRNA_display_to_seq[st.session_state.selected_gRNA]
+
     EDIT_TYPES = {
         "Delete 1 bp": "del1",
         "Insert A": "insA",
@@ -292,7 +314,7 @@ with tab_sim:
         sub_to = st.text_input("Sub TO", "T")
 
     if st.button("Simulate"):
-        idx = dna_seq.upper().find(actual)
+        idx = dna_seq.upper().find(gRNA_for_analysis)
         if idx == -1:
             st.error("gRNA not found in sequence!")
         else:
@@ -322,7 +344,7 @@ with tab_ai:
     context_parts = [
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
-        to_show[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
+        df_display[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
     ]
     ot_df = st.session_state.offtargets
     if ot_df is not None and not ot_df.empty:
@@ -390,7 +412,7 @@ with tab_rank:
         rank_df = (
             pd.DataFrame(
                 [
-                    {"gRNA": g, "Specificity": s}
+                    {"gRNA": u6_g_mod(g) if u6_toggle else g, "Specificity": s}
                     for g, s in st.session_state.guide_scores.items()
                 ]
             )
