@@ -3,15 +3,6 @@ from difflib import Differ
 import pandas as pd
 
 def hybrid_score(guide, off_target_count=0):
-    """
-    Hybrid scoring logic:
-    - Starts at 1.0
-    - Penalty if GC out of 40–70%
-    - Penalty for long A/T or G/C runs
-    - Penalty for T/A-rich seed (last 4 bases)
-    - Bonus for terminal G
-    - Penalty for off-targets
-    """
     gc = (guide.count('G') + guide.count('C')) / len(guide)
     seed = guide[-4:]
     score = 1.0
@@ -29,16 +20,6 @@ def hybrid_score(guide, off_target_count=0):
     return round(score, 3)
 
 def ml_gRNA_score(guide):
-    """
-    ML-style gRNA scoring (heuristic):
-    - Baseline 0.5
-    - +0.2 if GC 40–60%, +0.1 if 35–40% or 60–65%
-    - +0.1 if seed is not T/A rich
-    - -0.1 for any 4X repeat
-    - +0.05 if terminal G
-    - -0.05 if first base is T
-    Clipped between 0.0 and 1.0
-    """
     gc = (guide.count('G') + guide.count('C')) / len(guide)
     score = 0.5  # baseline
     if 0.40 < gc < 0.60:
@@ -67,7 +48,7 @@ def check_pam(pam_seq, pam):
         return pam_seq[:3] == "TTT" and pam_seq[3] in "ACG"
     return False
 
-def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70):
+def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70, add_5prime_g=False):
     sequence = dna_seq.upper().replace("\n", "").replace(" ", "")
     pam_len = len(pam)
     guides = []
@@ -77,6 +58,9 @@ def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70):
         if check_pam(pam_seq, pam):
             gc = (guide.count('G') + guide.count('C')) / guide_length * 100
             if min_gc <= gc <= max_gc and "TTTT" not in guide:
+                # U6 promoter option: Add G at 5' end if not present
+                if add_5prime_g and not guide.startswith("G"):
+                    guide = "G" + guide[:-1]
                 guides.append({
                     "Strand": "+",
                     "Start": i,
@@ -91,6 +75,8 @@ def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70):
         if check_pam(pam_seq, pam):
             gc = (guide.count('G') + guide.count('C')) / guide_length * 100
             if min_gc <= gc <= max_gc and "TTTT" not in guide:
+                if add_5prime_g and not guide.startswith("G"):
+                    guide = "G" + guide[:-1]
                 guides.append({
                     "Strand": "-",
                     "Start": len(sequence)-i-guide_length-pam_len,
