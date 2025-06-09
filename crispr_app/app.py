@@ -51,7 +51,7 @@ Higher = best chance of experimental success.
 
 st.set_page_config(page_title="🧬 CRISPR Guide RNA Designer", layout="wide")
 st.title("🧬 CRISPR Guide RNA Designer")
-st.markdown(SCORE_SUMMARY)  # Only shown ONCE, here
+st.markdown(SCORE_SUMMARY)
 
 # ---- Sidebar ----
 with st.sidebar:
@@ -73,6 +73,10 @@ with st.sidebar:
     }
     pam = GUIDE_TYPES[pam_label]
     guide_len = st.slider("Guide length", 18, 25, 20, key="guide_len")
+    
+    # U6 toggle
+    add_5g = st.toggle("Add 5’ G for U6 promoter compatibility", value=False)
+    
     min_gc = st.slider("Min GC %", 30, 60, 40, key="min_gc")
     max_gc = st.slider("Max GC %", 60, 80, 70, key="max_gc")
     bg_seq = st.text_area("Background DNA (off-target)", height=100, key="bg_seq")
@@ -85,7 +89,6 @@ with st.sidebar:
         key="edit_offset",
         help="Cas9 cut ≈ 3 bp upstream of PAM; set as needed.",
     )
-    u6_promoter = st.toggle("U6 Promoter (add G at 5′ end if missing)", value=False)
 
     st.header("🤖 AI Explain Settings")
     ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend_sidebar")
@@ -120,14 +123,9 @@ if st.button("🔍 Find gRNAs"):
         st.session_state.df_guides = None
     else:
         with st.spinner("Searching gRNAs…"):
-            # Generate gRNAs
-            guides_df = find_gRNAs(
+            st.session_state.df_guides = find_gRNAs(
                 dna_seq, pam, guide_len, min_gc, max_gc
             )
-            # If U6 promoter is toggled, prepend G to all guides (if missing)
-            if u6_promoter and not guides_df.empty:
-                guides_df["gRNA"] = guides_df["gRNA"].apply(lambda x: x if x.startswith("G") else "G" + x[:-1])
-            st.session_state.df_guides = guides_df
         st.session_state.update(
             offtargets=None,
             guide_scores=None,
@@ -142,14 +140,25 @@ if df is None or df.empty:
     st.info("Paste DNA & click **Find gRNAs** to begin.")
     st.stop()
 
+# --- Handle U6 5' G toggle ---
+if add_5g:
+    df["display_gRNA"] = df.gRNA.apply(lambda x: x if x.startswith("G") else "G" + x)
+    df["actual_gRNA"] = df.gRNA
+else:
+    df["display_gRNA"] = df.gRNA
+    df["actual_gRNA"] = df.gRNA
+
 if "HybridScore" not in df.columns or "MLScore" not in df.columns or "ConsensusScore" not in df.columns:
     df["HybridScore"] = [hybrid_score(g) for g in df.gRNA]
     df["MLScore"] = [ml_gRNA_score(g) for g in df.gRNA]
     df["ConsensusScore"] = ((df["HybridScore"] + df["MLScore"]) / 2).clip(upper=1.0)
 
 st.success(f"✅ {len(df)} gRNAs found")
-st.dataframe(df, use_container_width=True)
-st.download_button("⬇️ Download gRNAs CSV", df.to_csv(index=False), "guides.csv")
+# Show user the display gRNA (with/without G as appropriate)
+to_show = df.copy()
+to_show = to_show.rename(columns={"display_gRNA": "gRNA"})
+st.dataframe(to_show[["gRNA", "PAM", "GC%", "HybridScore", "MLScore", "ConsensusScore"]], use_container_width=True)
+st.download_button("⬇️ Download gRNAs CSV", to_show.to_csv(index=False), "guides.csv")
 
 st.markdown("---")
 st.header("📄 One Click Gemini Report")
@@ -160,7 +169,7 @@ def build_gemini_prompt():
         "### Score Logic Explanation (for AI only)\n",
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
-        df[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
+        to_show[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
     ]
     ot_df = st.session_state.offtargets
     if ot_df is not None and not ot_df.empty:
@@ -219,7 +228,6 @@ if st.session_state.gemini_report:
     st.subheader("Gemini AI Report")
     st.info(st.session_state.gemini_report)
 
-# Remove Visualization tab, only these remain:
 tab_ot, tab_sim, tab_ai, tab_rank = st.tabs(
     ["Off-targets", "Simulation & Indel", "AI Explain", "Ranking"]
 )
@@ -263,10 +271,11 @@ with tab_ot:
                 )
 
 with tab_sim:
-    g_list = df.gRNA.tolist()
-    st.session_state.selected_gRNA = st.selectbox(
-        "gRNA", g_list, key="sel_gRNA"
-    )
+    g_list = df["display_gRNA"].tolist()
+    # Find corresponding actual gRNA for simulation
+    g_lookup = dict(zip(df["display_gRNA"], df["actual_gRNA"]))
+    sel_display = st.selectbox("gRNA", g_list, key="sel_gRNA")
+    actual = g_lookup[sel_display]
     EDIT_TYPES = {
         "Delete 1 bp": "del1",
         "Insert A": "insA",
@@ -283,7 +292,7 @@ with tab_sim:
         sub_to = st.text_input("Sub TO", "T")
 
     if st.button("Simulate"):
-        idx = dna_seq.upper().find(st.session_state.selected_gRNA)
+        idx = dna_seq.upper().find(actual)
         if idx == -1:
             st.error("gRNA not found in sequence!")
         else:
@@ -313,7 +322,7 @@ with tab_ai:
     context_parts = [
         SCORE_EXPLAIN,
         "\n\n### gRNA Candidates Table (top 10 shown)\n",
-        df[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
+        to_show[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
     ]
     ot_df = st.session_state.offtargets
     if ot_df is not None and not ot_df.empty:
