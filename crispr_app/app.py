@@ -53,6 +53,7 @@ st.set_page_config(page_title="🧬 CRISPR Guide RNA Designer – For Plants, Hu
 st.title("🧬 CRISPR Guide RNA Designer")
 st.markdown("#### <span style='color:#22a35d;'>For Plants, Humans, Microbes – For All DNA</span>", unsafe_allow_html=True)
 
+
 # ---- Sidebar ----
 with st.sidebar:
     st.header("🧬 Sequence Input")
