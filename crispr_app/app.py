@@ -49,9 +49,9 @@ Averages both lab rules and ML predictions for a balanced rank.
 Higher = best chance of experimental success.
 """
 
-st.set_page_config(page_title="🧬 CRISPR Guide RNA Designer", layout="wide")
+st.set_page_config(page_title="🧬 CRISPR Guide RNA Designer – For Plants, Humans, Microbes & More", layout="wide")
 st.title("🧬 CRISPR Guide RNA Designer")
-st.markdown(SCORE_SUMMARY)  # Only shown ONCE, here
+st.markdown("#### <span style='color:#22a35d;'>For Plants, Humans, Microbes – For All DNA</span>", unsafe_allow_html=True)
 
 # ---- Sidebar ----
 with st.sidebar:
