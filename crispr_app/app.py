@@ -3,7 +3,6 @@ import pandas as pd
 from utils import (
     validate_sequence,
     load_fasta,
-    visualize_guide_location,
 )
 from analysis import (
     find_gRNAs,
@@ -86,6 +85,7 @@ with st.sidebar:
         key="edit_offset",
         help="Cas9 cut ≈ 3 bp upstream of PAM; set as needed.",
     )
+    u6_promoter = st.toggle("U6 Promoter (add G at 5′ end if missing)", value=False)
 
     st.header("🤖 AI Explain Settings")
     ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend_sidebar")
@@ -120,9 +120,14 @@ if st.button("🔍 Find gRNAs"):
         st.session_state.df_guides = None
     else:
         with st.spinner("Searching gRNAs…"):
-            st.session_state.df_guides = find_gRNAs(
+            # Generate gRNAs
+            guides_df = find_gRNAs(
                 dna_seq, pam, guide_len, min_gc, max_gc
             )
+            # If U6 promoter is toggled, prepend G to all guides (if missing)
+            if u6_promoter and not guides_df.empty:
+                guides_df["gRNA"] = guides_df["gRNA"].apply(lambda x: x if x.startswith("G") else "G" + x[:-1])
+            st.session_state.df_guides = guides_df
         st.session_state.update(
             offtargets=None,
             guide_scores=None,
@@ -214,8 +219,9 @@ if st.session_state.gemini_report:
     st.subheader("Gemini AI Report")
     st.info(st.session_state.gemini_report)
 
-tab_ot, tab_sim, tab_ai, tab_vis, tab_rank = st.tabs(
-    ["Off-targets", "Simulation & Indel", "AI Explain", "Visualization", "Ranking"]
+# Remove Visualization tab, only these remain:
+tab_ot, tab_sim, tab_ai, tab_rank = st.tabs(
+    ["Off-targets", "Simulation & Indel", "AI Explain", "Ranking"]
 )
 
 with tab_ot:
@@ -369,14 +375,6 @@ with tab_ai:
                 st.session_state.ai_response = "API error:\n" + traceback.format_exc(limit=2)
     if st.session_state.ai_response:
         st.info(st.session_state.ai_response)
-
-with tab_vis:
-    idx = dna_seq.upper().find(st.session_state.selected_gRNA)
-    if idx != -1:
-        ax = visualize_guide_location(dna_seq, st.session_state.selected_gRNA, idx)
-        st.pyplot(ax.figure)
-    else:
-        st.info("gRNA not found for visualization.")
 
 with tab_rank:
     if st.session_state.guide_scores:
