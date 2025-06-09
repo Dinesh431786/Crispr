@@ -9,7 +9,15 @@ A **fast, user-friendly web app** for designing, scoring, and analyzing CRISPR g
 - [Launch the app on Streamlit](https://crispr-voxelta.streamlit.app/)  
 - **Free. Open source. No login required.**
 
----
+# 🧬 CRISPR Guide RNA Designer
+
+**A fast, user-friendly web app for designing, scoring, and analyzing CRISPR guide RNAs (gRNAs).**
+
+
+## 🎬 Demo Video
+  
+▶️ **[Watch on YouTube](https://youtu.be/UJgdxXRIWns)**
+
 
 ## 🎯 Unique Features
 
