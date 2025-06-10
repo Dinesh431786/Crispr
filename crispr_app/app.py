@@ -265,23 +265,23 @@ with tab_ot:
                 df, bg_seq, max_mm
             )
             scores = {
-                g: round(
-                    1.0
-                    if st.session_state.offtargets[
-                        st.session_state.offtargets.gRNA == g
-                    ].empty
-                    else 1.0
-                    / (
-                        1
-                        + st.session_state.offtargets[
-                            st.session_state.offtargets.gRNA == g
-                        ]
-                        .Mismatches.sum()
-                    ),
-                    3,
-                )
-                for g in df.gRNA
-            }
+    g: round(
+        1.0
+        if st.session_state.offtargets[
+            st.session_state.offtargets["gRNA"] == g
+        ].empty
+        else 1.0
+        / (
+            1
+            + st.session_state.offtargets[
+                st.session_state.offtargets["gRNA"] == g
+            ]["Mismatches"].sum()
+        ),
+        3,
+    )
+    for g in df.gRNA
+}
+
             st.session_state.guide_scores = scores
         if st.session_state.offtargets is not None:
             if st.session_state.offtargets.empty:
