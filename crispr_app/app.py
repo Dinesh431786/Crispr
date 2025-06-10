@@ -56,7 +56,6 @@ st.markdown("#### <span style='color:#22a35d;'>For Plants, Humans, Microbes – 
 # Always show this!
 st.markdown(SCORE_SUMMARY)
 
-
 # ---- Sidebar ----
 with st.sidebar:
     st.header("🧬 Sequence Input")
@@ -69,15 +68,15 @@ with st.sidebar:
         else:
             dna_seq = seq
 
-    pam_label = st.selectbox("PAM", ["Cas9 NGG", "Cas9 NAG", "Cas12a TTTV"], key="pam")
+    pam_label = st.selectbox("PAM", ["Cas9 NGG", "Cas9 NAG", "Cas9 NG", "Cas12a TTTV"], key="pam")
     GUIDE_TYPES = {
         "Cas9 NGG": "NGG",
         "Cas9 NAG": "NAG",
+        "Cas9 NG": "NG",
         "Cas12a TTTV": "TTTV",
     }
     pam = GUIDE_TYPES[pam_label]
 
-    # U6 toggle up for better UX
     u6_g_toggle = st.toggle(
         "U6 Promoter (add G at 5’ if needed)", value=False, key="u6_g_toggle",
         help="If ON, adds a leading 'G' to each gRNA if not already present (for U6/T7 promoters)."
@@ -136,8 +135,7 @@ def u6_g_mod(seq):
 
 def apply_u6_toggle_to_df(df, u6_toggle):
     df_mod = df.copy()
-    if u6_toggle:
-        # Replace the gRNA column in-place (NO duplicate column bug)
+    if u6_toggle and "gRNA" in df_mod.columns:
         df_mod["gRNA"] = df_mod["gRNA"].apply(u6_g_mod)
     return df_mod
 
@@ -189,7 +187,7 @@ def build_gemini_prompt():
         df_display[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
     ]
     ot_df = st.session_state.offtargets
-    if ot_df is not None and not ot_df.empty:
+    if ot_df is not None and not ot_df.empty and "gRNA" in ot_df.columns and "Mismatches" in ot_df.columns:
         off_target_summary = ot_df.groupby("gRNA")["Mismatches"].count().reset_index()
         context_parts.append("\n\n### Off-target Summary\n")
         context_parts.append(off_target_summary.to_csv(sep="|", index=False))
@@ -261,45 +259,44 @@ with tab_ot:
         st.info("Provide background DNA in sidebar for off-target scanning.")
     else:
         if st.button("Scan off-targets"):
-            result_from_find = find_off_targets_detailed(
-                df, bg_seq, max_mm
-            )
+            result_from_find = find_off_targets_detailed(df, bg_seq, max_mm)
+            # handle series case
             if isinstance(result_from_find, pd.Series):
-                st.session_state.offtargets = result_from_find.to_frame().T
+                ot_df = result_from_find.to_frame().T
             else:
-                st.session_state.offtargets = result_from_find
-            scores = {
-    g: round(
-        1.0
-        if st.session_state.offtargets[
-            st.session_state.offtargets["gRNA"] == g
-        ].empty
-        else 1.0
-        / (
-            1
-            + st.session_state.offtargets[
-                st.session_state.offtargets["gRNA"] == g
-            ]["Mismatches"].sum()
-        ),
-        3,
-    )
-    for g in df.gRNA
-}
+                ot_df = result_from_find
 
+            st.session_state.offtargets = ot_df
+
+            # SAFETY: Only score if right columns exist!
+            scores = {}
+            if ot_df is not None and not ot_df.empty and "gRNA" in ot_df.columns and "Mismatches" in ot_df.columns:
+                for g in df.gRNA:
+                    subset = ot_df[ot_df["gRNA"] == g]
+                    if subset.empty:
+                        scores[g] = 1.0
+                    else:
+                        scores[g] = round(1.0 / (1 + subset["Mismatches"].sum()), 3)
+            else:
+                # All 1.0 if no off-targets or missing columns
+                scores = {g: 1.0 for g in df.gRNA}
+                if ot_df is not None and not ot_df.empty:
+                    st.error("Off-target results missing required columns ('gRNA', 'Mismatches').")
             st.session_state.guide_scores = scores
-        if st.session_state.offtargets is not None:
-            if st.session_state.offtargets.empty:
+
+        ot_df = st.session_state.offtargets
+        if ot_df is not None:
+            if ot_df.empty:
                 st.info("No off-targets within given mismatches.")
             else:
-                st.dataframe(st.session_state.offtargets, use_container_width=True)
+                st.dataframe(ot_df, use_container_width=True)
                 st.download_button(
                     "⬇️ Download off-targets",
-                    st.session_state.offtargets.to_csv(index=False),
+                    ot_df.to_csv(index=False),
                     "offtargets.csv",
                 )
 
 with tab_sim:
-    # The gRNA display for selection (should show with U6 G if toggle is on)
     if u6_toggle:
         g_list_display = [u6_g_mod(g) for g in df.gRNA.tolist()]
     else:
@@ -309,7 +306,6 @@ with tab_sim:
     st.session_state.selected_gRNA = st.selectbox(
         "gRNA", g_list_display, key="sel_gRNA"
     )
-    # Map back to original sequence for all simulations/analysis!
     gRNA_for_analysis = gRNA_display_to_seq[st.session_state.selected_gRNA]
 
     EDIT_TYPES = {
@@ -361,7 +357,7 @@ with tab_ai:
         df_display[["gRNA", "HybridScore", "MLScore", "ConsensusScore"]].head(10).to_csv(sep="|", index=False),
     ]
     ot_df = st.session_state.offtargets
-    if ot_df is not None and not ot_df.empty:
+    if ot_df is not None and not ot_df.empty and "gRNA" in ot_df.columns and "Mismatches" in ot_df.columns:
         off_target_summary = ot_df.groupby("gRNA")["Mismatches"].count().reset_index()
         context_parts.append("\n\n### Off-target Summary\n")
         context_parts.append(off_target_summary.to_csv(sep="|", index=False))
