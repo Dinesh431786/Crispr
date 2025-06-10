@@ -53,7 +53,6 @@ st.set_page_config(page_title="🧬 CRISPR Guide RNA Designer – For Plants, Hu
 st.title("🧬 CRISPR Guide RNA Designer")
 st.markdown("#### <span style='color:#22a35d;'>For Plants, Humans, Microbes – For All DNA</span>", unsafe_allow_html=True)
 
-# Always show this!
 st.markdown(SCORE_SUMMARY)
 
 # ---- Sidebar ----
@@ -237,7 +236,6 @@ if st.button("📄 Generate Gemini Report"):
                 st.session_state.gemini_report = resp.choices[0].message.content
         except Exception as e:
             error_str = str(e)
-            # FRIENDLY Gemini error reporting
             if "API key not valid" in error_str or "API_KEY_INVALID" in error_str:
                 st.error("❌ Your Gemini API key is invalid or this model is not enabled for your account/project. Please double-check your key and model selection.")
             elif "model not found" in error_str or "not supported" in error_str:
@@ -250,8 +248,8 @@ if st.session_state.gemini_report:
     st.subheader("Gemini AI Report")
     st.info(st.session_state.gemini_report)
 
-tab_ot, tab_sim, tab_ai, tab_rank = st.tabs(
-    ["Off-targets", "Simulation & Indel", "AI Explain", "Ranking"]
+tab_ot, tab_sim, tab_ai, tab_rank, tab_hdr = st.tabs(
+    ["Off-targets", "Simulation & Indel", "AI Explain", "Ranking", "HDR Simulation"]
 )
 
 with tab_ot:
@@ -260,7 +258,6 @@ with tab_ot:
     else:
         if st.button("Scan off-targets"):
             result_from_find = find_off_targets_detailed(df, bg_seq, max_mm)
-            # handle series case
             if isinstance(result_from_find, pd.Series):
                 ot_df = result_from_find.to_frame().T
             else:
@@ -268,7 +265,6 @@ with tab_ot:
 
             st.session_state.offtargets = ot_df
 
-            # SAFETY: Only score if right columns exist!
             scores = {}
             if ot_df is not None and not ot_df.empty and "gRNA" in ot_df.columns and "Mismatches" in ot_df.columns:
                 for g in df.gRNA:
@@ -278,7 +274,6 @@ with tab_ot:
                     else:
                         scores[g] = round(1.0 / (1 + subset["Mismatches"].sum()), 3)
             else:
-                # All 1.0 if no off-targets or missing columns
                 scores = {g: 1.0 for g in df.gRNA}
                 if ot_df is not None and not ot_df.empty:
                     st.error("Off-target results missing required columns ('gRNA', 'Mismatches').")
@@ -432,3 +427,42 @@ with tab_rank:
         st.dataframe(rank_df, use_container_width=True)
     else:
         st.info("Run off-target scan to get specificity ranking.")
+
+with tab_hdr:
+    st.header("🔧 HDR Repair Simulation")
+    st.markdown(
+        """
+        Simulate HDR (homology-directed repair) outcomes. Enter your donor ssODN and select context.
+        """
+    )
+    donor = st.text_area("Donor template (ssODN)", "", help="Full donor sequence: left homology arm + edit + right arm")
+    left_len = st.number_input("Homology arm (left) length", 20, 60, 35)
+    right_len = st.number_input("Homology arm (right) length", 20, 60, 35)
+    cell_type = st.selectbox("Cell Type", ["HEK293", "iPSCs", "HSCs", "ESCs", "Fibroblasts"])
+    context = st.selectbox("Experimental Context", ["in vitro", "in vivo"])
+    g_list = df.gRNA.tolist()
+    gRNA_for_hdr = st.selectbox("gRNA for HDR", g_list, key="hdr_gRNA")
+    edit_offset_hdr = st.number_input("Edit offset from gRNA (bp)", 0, len(dna_seq), int(len(g_list[0])/2))
+
+    if st.button("Simulate HDR Repair"):
+        idx = dna_seq.upper().find(gRNA_for_hdr)
+        if idx == -1:
+            st.error("gRNA not found in sequence!")
+        else:
+            cut_site = idx + edit_offset_hdr
+            res = predict_hdr_repair(
+                seq=dna_seq,
+                cut_pos=cut_site,
+                donor=donor,
+                left_arm_len=int(left_len),
+                right_arm_len=int(right_len),
+                cell_type=cell_type,
+                context=context,
+            )
+            st.subheader("HDR Simulation Results")
+            st.code(res["edited_seq"], language="plaintext")
+            st.markdown(f"**Edited Protein:** `{res['edited_protein']}`")
+            st.markdown(f"**Edit Type:** `{res['edit_type']}`")
+            st.markdown(f"**Homology Arm Match (Specificity):** `{res['specificity']} arms matched`")
+            st.markdown(f"**Estimated HDR Efficiency:** `{res['efficiency']*100:.1f}%`")
+            st.info("Interpretation: More arms matched = higher specificity. Higher efficiency = easier HDR.")
