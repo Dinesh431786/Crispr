@@ -261,9 +261,13 @@ with tab_ot:
         st.info("Provide background DNA in sidebar for off-target scanning.")
     else:
         if st.button("Scan off-targets"):
-            st.session_state.offtargets = find_off_targets_detailed(
+            result_from_find = find_off_targets_detailed(
                 df, bg_seq, max_mm
             )
+            if isinstance(result_from_find, pd.Series):
+                st.session_state.offtargets = result_from_find.to_frame().T
+            else:
+                st.session_state.offtargets = result_from_find
             scores = {
     g: round(
         1.0
