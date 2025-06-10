@@ -187,73 +187,18 @@ def indel_simulations(seq, cut_index):
         })
     return pd.DataFrame(results)
 
-# --- NEW: Robust HDR prediction function ---
-def predict_hdr_repair(
-    seq, 
-    cut_pos, 
-    donor, 
-    left_arm_len, 
-    right_arm_len, 
-    cell_type, 
-    context
-):
-    """
-    Simulate HDR repair.
-    Returns a dict with:
-    - edited_seq
-    - edited_protein
-    - edit_type (silent/missense/frameshift/premature stop)
-    - specificity (number of matching homology arms)
-    - efficiency (rule-based 0-1)
-    """
-    seq = seq.upper().replace("\n", "")
-    donor = donor.upper().replace("\n", "")
-    left_arm = donor[:left_arm_len]
-    right_arm = donor[-right_arm_len:] if right_arm_len else ""
-    # The 'edit' region is everything between the homology arms
-    edit_sequence = donor[left_arm_len:len(donor)-right_arm_len] if right_arm_len else donor[left_arm_len:]
-
-    # Specificity check: do arms match genomic sequence?
-    left_match = seq[max(0, cut_pos - left_arm_len):cut_pos]
-    right_match = seq[cut_pos:cut_pos + right_arm_len]
-    specificity = int(left_arm == left_match) + int(right_arm == right_match)
-
-    # Simulate HDR edit
-    edited_seq = seq[:cut_pos] + edit_sequence + seq[cut_pos+len(edit_sequence):]
-    before_protein = safe_translate(seq)
-    edited_protein = safe_translate(edited_seq)
-    frameshift = len(edited_seq) % 3 != len(seq) % 3
-    premature_stop = ("*" in edited_protein and "*" not in before_protein)
-
-    # Efficiency rule-based
-    efficiency = 0.0
-    if left_arm_len >= 35 and right_arm_len >= 35:
-        efficiency += 0.2
-    if cell_type in ["iPSCs", "HSCs", "ESCs"]:
-        efficiency += 0.2
-    if context == "in vitro":
-        efficiency += 0.1
-    if 5 <= len(edit_sequence) <= 15:
-        efficiency += 0.3
-    gc_content = lambda s: (s.count("G") + s.count("C")) / len(s) if len(s) > 0 else 0
-    if 0.4 <= gc_content(left_arm + right_arm) <= 0.6:
-        efficiency += 0.1
-    efficiency = round(min(efficiency, 1.0), 2)
-
-    # Edit type
-    if frameshift:
-        edit_type = "frameshift"
-    elif premature_stop:
-        edit_type = "premature stop"
-    elif before_protein != edited_protein:
-        edit_type = "missense"
+def predict_hdr_repair(seq, cut_pos):
+    if cut_pos >= len(seq) - 1:
+        return "uncertain"
+    after = seq[:cut_pos] + seq[cut_pos+1:]
+    before_prot = safe_translate(seq)
+    after_prot = safe_translate(after)
+    if len(after) % 3 != len(seq) % 3:
+        if "*" in after_prot and "*" not in before_prot:
+            return "frameshift/early stop"
+        return "frameshift"
     else:
-        edit_type = "silent"
-
-    return {
-        "edited_seq": edited_seq,
-        "edited_protein": edited_protein,
-        "edit_type": edit_type,
-        "specificity": specificity,
-        "efficiency": efficiency
-    }
+        if after_prot == before_prot:
+            return "silent"
+        else:
+            return "in-frame"
