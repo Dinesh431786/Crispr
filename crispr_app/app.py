@@ -406,28 +406,4 @@ with tab_ai:
                 st.session_state.ai_response = resp.choices[0].message.content
         except Exception as e:
             error_str = str(e)
-            if "API key not valid" in error_str or "API_KEY_INVALID" in error_str:
-                st.error("❌ Your Gemini API key is invalid or this model is not enabled for your account/project. Please double-check your key and model selection.")
-            elif "model not found" in error_str or "not supported" in error_str:
-                st.error("❌ The selected Gemini model is not available. Try selecting 'gemini-pro' in the sidebar.")
-            else:
-                st.error(f"Gemini API error: {error_str}")
-            st.session_state.ai_response = ""
-    if st.session_state.ai_response:
-        st.info(st.session_state.ai_response)
-
-with tab_rank:
-    if st.session_state.guide_scores:
-        rank_df = (
-            pd.DataFrame(
-                [
-                    {"gRNA": u6_g_mod(g) if u6_toggle else g, "Specificity": s}
-                    for g, s in st.session_state.guide_scores.items()
-                ]
-            )
-            .sort_values("Specificity", ascending=False)
-            .reset_index(drop=True)
-        )
-        st.dataframe(rank_df, use_container_width=True)
-    else:
-        st.info("Run off-target scan to get specificity ranking.")
+            if "API key not valid" in
