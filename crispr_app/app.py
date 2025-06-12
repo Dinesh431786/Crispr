@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from utils import (
     validate_sequence,
-    load_fasta,
+    load_fasta
 )
 from analysis import (
     find_gRNAs,
