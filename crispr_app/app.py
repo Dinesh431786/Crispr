@@ -297,16 +297,19 @@ with tab_ot:
                 )
 
 with tab_sim:
-    if u6_toggle:
-        g_list_display = [u6_g_mod(g) for g in df.gRNA.tolist()]
-    else:
-        g_list_display = df.gRNA.tolist()
-    gRNA_display_to_seq = {u6_g_mod(g) if u6_toggle else g: g for g in df.gRNA.tolist()}
+    # Build display list showing both gRNA and strand for user clarity
+    g_list_display = []
+    g_display_map = {}
+    for idx, row in df.iterrows():
+        gRNA_display = u6_g_mod(row.gRNA) if u6_toggle else row.gRNA
+        label = f"{gRNA_display} [{row.Strand}]"
+        g_list_display.append(label)
+        g_display_map[label] = (row.gRNA, row.Strand, row.Start)
 
-    st.session_state.selected_gRNA = st.selectbox(
+    st.session_state.selected_gRNA_display = st.selectbox(
         "gRNA", g_list_display, key="sel_gRNA"
     )
-    gRNA_for_analysis = gRNA_display_to_seq[st.session_state.selected_gRNA]
+    selected_gRNA, selected_strand, selected_start = g_display_map[st.session_state.selected_gRNA_display]
 
     EDIT_TYPES = {
         "Delete 1 bp": "del1",
@@ -324,27 +327,23 @@ with tab_sim:
         sub_to = st.text_input("Sub TO", "T")
 
     if st.button("Simulate"):
-        sel_row = df[df['gRNA'] == gRNA_for_analysis]
-        if sel_row.empty:
-            st.error("gRNA not found in guides table! (Unexpected error)")
-        else:
-            idx = int(sel_row['Start'].values[0])
-            strand = sel_row['Strand'].values[0]
-            seq_for_sim = dna_seq.upper().replace('\n', '').replace(' ', '')
-            # For reverse strand, use reverse complement for simulation
-            if strand == "-":
-                from Bio.Seq import Seq
-                seq_for_sim = str(Seq(seq_for_sim).reverse_complement())
-            st.session_state.sim_result = simulate_protein_edit(
-                seq_for_sim,
-                idx + edit_offset,
-                EDIT_TYPES[st.session_state.selected_edit],
-                sub_from=sub_from,
-                sub_to=sub_to,
-            )
-            st.session_state.sim_indel = indel_simulations(
-                seq_for_sim, idx + edit_offset
-            )
+        seq_for_sim = dna_seq.upper().replace('\n', '').replace(' ', '')
+        sim_start_index = int(selected_start) + edit_offset
+        if selected_strand == "-":
+            from Bio.Seq import Seq
+            seq_for_sim = str(Seq(seq_for_sim).reverse_complement())
+            # For reverse strand, adjust cut index to match reverse complement
+            sim_start_index = int(selected_start) + edit_offset
+        st.session_state.sim_result = simulate_protein_edit(
+            seq_for_sim,
+            sim_start_index,
+            EDIT_TYPES[st.session_state.selected_edit],
+            sub_from=sub_from,
+            sub_to=sub_to,
+        )
+        st.session_state.sim_indel = indel_simulations(
+            seq_for_sim, sim_start_index
+        )
 
     if st.session_state.sim_result:
         before, after, fs, stop = st.session_state.sim_result
