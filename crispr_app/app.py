@@ -23,7 +23,8 @@ for k in (
     "dna_seq", "df_guides", "offtargets", "guide_scores",
     "selected_gRNA", "sim_result", "sim_indel", "gemini_report", "ai_response"
 ):
-    st.session_state.setdefault(k, None)
+    if k not in st.session_state:
+        st.session_state[k] = None
 
 # ---------- STEP 1: DNA INPUT ----------
 if step == steps[0]:
@@ -41,7 +42,7 @@ if step == steps[0]:
         else:
             dna_seq = seq
             st.success("Loaded DNA from file!")
-    st.session_state.dna_seq = dna_seq.strip()
+    st.session_state.dna_seq = dna_seq.strip() if dna_seq else None
 
     if st.button("✅ Proceed to gRNA Design"):
         ok, msg = validate_sequence(dna_seq)
@@ -53,9 +54,11 @@ if step == steps[0]:
 # ---------- STEP 2: gRNA DESIGN ----------
 elif step == steps[1]:
     st.title("🧬 Step 2: Design & Score gRNAs")
-    st.info("Set your PAM and design rules. Click 'Find gRNAs' for results!")
+    if not st.session_state.dna_seq or len(st.session_state.dna_seq) < 23:
+        st.warning("Please upload or paste a DNA sequence in Step 1 first.")
+        st.stop()
 
-    # Visual card: quick design summary
+    st.info("Set your PAM and design rules. Click 'Find gRNAs' for results!")
     st.markdown(f"""
         <div style="background-color:#f4fbfa; border-radius:8px; padding:15px;">
         <b>Design Summary:</b>  
@@ -100,7 +103,6 @@ elif step == steps[1]:
 
     df = st.session_state.df_guides
     if df is not None and not df.empty:
-        # Visual results: show only best, status chips
         best = df[df.ConsensusScore >= 0.8]
         st.subheader("🌟 Top gRNA Candidates")
         st.dataframe(best[["Strand", "Start", "gRNA", "PAM", "GC%", "ConsensusScore"]], use_container_width=True)
@@ -112,13 +114,14 @@ elif step == steps[1]:
 elif step == steps[2]:
     st.title("🧬 Step 3: Simulate Edit / Indel Effects")
     df = st.session_state.df_guides
-    if df is None or df.empty:
+    if df is None or df.empty or not st.session_state.dna_seq:
         st.warning("Please find gRNAs first (go back to Step 2).")
         st.stop()
-    # gRNA selection
     g_list = df.gRNA.tolist()
+    if not g_list:
+        st.warning("No gRNAs available—design them in Step 2 first.")
+        st.stop()
     st.session_state.selected_gRNA = st.selectbox("Choose a gRNA for simulation", g_list, key="sel_gRNA_sim")
-    # Edit type
     edit_options = {
         "Delete 1 bp": "del1", "Insert A": "insA",
         "Delete 3 bp": "del3", "Insert G": "insG", "Substitute A→T": "subAG"
@@ -131,17 +134,20 @@ elif step == steps[2]:
     edit_offset = st.slider("Edit offset from PAM", 0, st.session_state.get("guide_len", 20), st.session_state.get("guide_len", 20), key="edit_offset")
 
     if st.button("Simulate Edit"):
-        idx = st.session_state.dna_seq.upper().find(st.session_state.selected_gRNA)
-        if idx == -1:
-            st.error("gRNA not found in sequence!")
+        if st.session_state.dna_seq is None or st.session_state.selected_gRNA is None:
+            st.error("Missing DNA or gRNA. Please repeat Step 1 & 2.")
         else:
-            st.session_state.sim_result = simulate_protein_edit(
-                st.session_state.dna_seq, idx + edit_offset,
-                edit_options[st.session_state.selected_edit], sub_from=sub_from, sub_to=sub_to
-            )
-            st.session_state.sim_indel = indel_simulations(
-                st.session_state.dna_seq, idx + edit_offset
-            )
+            idx = st.session_state.dna_seq.upper().find(st.session_state.selected_gRNA)
+            if idx == -1:
+                st.error("gRNA not found in sequence!")
+            else:
+                st.session_state.sim_result = simulate_protein_edit(
+                    st.session_state.dna_seq, idx + edit_offset,
+                    edit_options[st.session_state.selected_edit], sub_from=sub_from, sub_to=sub_to
+                )
+                st.session_state.sim_indel = indel_simulations(
+                    st.session_state.dna_seq, idx + edit_offset
+                )
     # Show result visually
     if st.session_state.sim_result:
         before, after, fs, stop = st.session_state.sim_result
@@ -166,7 +172,6 @@ elif step == steps[3]:
     if st.button("🔬 Scan off-targets"):
         result_from_find = find_off_targets_detailed(df, bg_seq, max_mm)
         st.session_state.offtargets = result_from_find
-        # Score
         scores = {}
         if result_from_find is not None and not result_from_find.empty and "gRNA" in result_from_find.columns and "Mismatches" in result_from_find.columns:
             for g in df.gRNA:
@@ -205,7 +210,6 @@ elif step == steps[3]:
 elif step == steps[4]:
     st.title("🧬 Step 5: AI Explain & Gemini Report")
     st.info("Ask Gemini/OpenAI for a scientific summary or experiment advice! Enter your API key below.")
-    # AI settings panel
     with st.expander("⚙️ AI Backend Settings", expanded=False):
         ai_backend = st.selectbox("AI Backend", ["Gemini", "OpenAI"], key="ai_backend")
         if ai_backend == "Gemini":
@@ -216,37 +220,14 @@ elif step == steps[4]:
                 ], key="gemini_model"
             )
         api_key = st.text_input("API Key", type="password", key="api_key")
-    # Prompt for AI
     prompt = st.text_area("AI prompt (optional):", "Summarize gRNA results and potential experimental outcomes.")
-
-    # ---- PATCH: Compose full prompt from results ----
-    context_parts = []
-    df = st.session_state.get("df_guides", None)
-    ot_df = st.session_state.get("offtargets", None)
-    sim_res = st.session_state.get("sim_result", None)
-
-    if df is not None and not df.empty:
-        context_parts.append("## Top gRNAs and scores (first 10):\n")
-        context_parts.append(df[["gRNA", "ConsensusScore", "HybridScore", "MLScore"]].head(10).to_csv(index=False))
-    if ot_df is not None and not ot_df.empty:
-        context_parts.append("\n## Off-target summary (first 10):\n")
-        context_parts.append(ot_df.head(10).to_csv(index=False))
-    if sim_res:
-        before, after, fs, stop = sim_res
-        context_parts.append("\n## Edit simulation result:\n")
-        context_parts.append(f"Before protein: {before}\nAfter protein: {after}\nFrameshift: {fs}, Premature stop: {stop}")
-    if prompt.strip():
-        context_parts.append(f"\nUser notes: {prompt.strip()}")
-
-    full_prompt = "\n".join(context_parts) + "\n\nSummarize the CRISPR results above for a scientist. Highlight best guides, off-target risks, and predicted edit effects."
-
     if st.button("📄 Generate AI/Gemini Report"):
         try:
             if ai_backend == "Gemini":
                 import google.generativeai as genai
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel(gemini_model)
-                result = model.generate_content(full_prompt)
+                result = model.generate_content(prompt)
                 st.session_state.gemini_report = result.text if hasattr(result, "text") else str(result)
             else:
                 import openai
@@ -255,7 +236,7 @@ elif step == steps[4]:
                     model="gpt-3.5-turbo",
                     messages=[
                         {"role": "system", "content": "You are a CRISPR genome editing expert."},
-                        {"role": "user", "content": full_prompt},
+                        {"role": "user", "content": prompt},
                     ],
                 )
                 st.session_state.gemini_report = resp.choices[0].message.content
