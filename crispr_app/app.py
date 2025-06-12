@@ -324,19 +324,26 @@ with tab_sim:
         sub_to = st.text_input("Sub TO", "T")
 
     if st.button("Simulate"):
-        idx = dna_seq.upper().find(gRNA_for_analysis)
-        if idx == -1:
-            st.error("gRNA not found in sequence!")
+        sel_row = df[df['gRNA'] == gRNA_for_analysis]
+        if sel_row.empty:
+            st.error("gRNA not found in guides table! (Unexpected error)")
         else:
+            idx = int(sel_row['Start'].values[0])
+            strand = sel_row['Strand'].values[0]
+            seq_for_sim = dna_seq.upper().replace('\n', '').replace(' ', '')
+            # For reverse strand, use reverse complement for simulation
+            if strand == "-":
+                from Bio.Seq import Seq
+                seq_for_sim = str(Seq(seq_for_sim).reverse_complement())
             st.session_state.sim_result = simulate_protein_edit(
-                dna_seq,
+                seq_for_sim,
                 idx + edit_offset,
                 EDIT_TYPES[st.session_state.selected_edit],
                 sub_from=sub_from,
                 sub_to=sub_to,
             )
             st.session_state.sim_indel = indel_simulations(
-                dna_seq, idx + edit_offset
+                seq_for_sim, idx + edit_offset
             )
 
     if st.session_state.sim_result:
