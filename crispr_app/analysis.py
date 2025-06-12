@@ -157,18 +157,14 @@ def simulate_protein_edit(seq, cut_index, edit_type="del1", insert_base="A", sub
     return prot_before, prot_after, frameshift, stop_lost
 
 def diff_proteins(before, after):
-    d = Differ()
+    # Show amino acid differences with positions
     result = []
-    for s in d.compare(before, after):
-        if s.startswith('+'):
-            result.append(f'**+{s[2:]}**')
-        elif s.startswith('-'):
-            result.append(f'~~{s[2:]}~~')
-        elif s.startswith('?'):
-            continue
-        else:
-            result.append(s)
-    return ''.join(result)
+    for i, (a, b) in enumerate(zip(before, after), 1):
+        if a != b:
+            result.append(f"Position {i}: {a} → {b}")
+    if len(before) != len(after):
+        result.append(f"Length changed: {len(before)} → {len(after)}")
+    return "; ".join(result) if result else "No change"
 
 def indel_simulations(seq, cut_index):
     results = []
