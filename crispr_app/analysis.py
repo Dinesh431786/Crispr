@@ -40,17 +40,20 @@ def ml_gRNA_score(guide):
     return round(score, 3)
 
 def check_pam(pam_seq, pam):
+    # Now supports NG, NGG, NAG, TTTV
     if pam == "NGG":
-        return pam_seq[1:] == "GG"
+        return len(pam_seq) == 3 and pam_seq[1:] == "GG"
     elif pam == "NAG":
-        return pam_seq[1:] == "AG"
+        return len(pam_seq) == 3 and pam_seq[1:] == "AG"
+    elif pam == "NG":
+        return len(pam_seq) == 2 and pam_seq[1] == "G"
     elif pam == "TTTV":
-        return pam_seq[:3] == "TTT" and pam_seq[3] in "ACG"
+        return len(pam_seq) == 4 and pam_seq[:3] == "TTT" and pam_seq[3] in "ACG"
     return False
 
 def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70, add_5prime_g=False):
     sequence = dna_seq.upper().replace("\n", "").replace(" ", "")
-    pam_len = len(pam)
+    pam_len = 2 if pam == "NG" else (4 if pam == "TTTV" else 3)
     guides = []
     for i in range(len(sequence) - guide_length - pam_len + 1):
         guide = sequence[i:i+guide_length]
@@ -68,6 +71,7 @@ def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70, add_5p
                     "PAM": pam_seq,
                     "GC%": round(gc,2),
                 })
+    # Scan reverse complement (minus strand)
     rc_sequence = str(Seq(sequence).reverse_complement())
     for i in range(len(rc_sequence) - guide_length - pam_len + 1):
         guide = rc_sequence[i:i+guide_length]
