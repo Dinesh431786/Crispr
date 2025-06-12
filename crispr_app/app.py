@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
-from utils import (
+from utils import
     validate_sequence,
     load_fasta
-)
 from analysis import (
     find_gRNAs,
     find_off_targets_detailed,
