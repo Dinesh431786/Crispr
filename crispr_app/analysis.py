@@ -100,37 +100,25 @@ def count_mismatches(a, b):
     return sum(1 for x, y in zip(a, b) if x != y)
 
 def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
+    # Improved: returns ALL windows up to max_mismatches, never just perfect matches!
     results = []
     bg_seq = background_seq.upper().replace('\n', '').replace(' ', '')[:1_000_000]
     for _, row in guides.iterrows():
         guide = row["gRNA"].upper()
-        details = []
-        for i in range(len(bg_seq) - len(guide) + 1):
-            window = bg_seq[i:i+len(guide)]
-            if len(window) != len(guide):
+        guide_len = len(guide)
+        for i in range(len(bg_seq) - guide_len + 1):
+            window = bg_seq[i:i+guide_len]
+            if len(window) != guide_len:
                 continue
             mismatches = count_mismatches(guide, window)
             if mismatches <= max_mismatches:
-                details.append({
-                    "Position": i,
+                results.append({
+                    "gRNA": guide,
+                    "OffTargetPos": i,
                     "Mismatches": mismatches,
-                    "Sequence": window
+                    "TargetSeq": window
                 })
-        results.append({
-            "gRNA": guide,
-            "OffTargetCount": len(details),
-            "Details": details
-        })
-    flat = []
-    for result in results:
-        for detail in result["Details"]:
-            flat.append({
-                "gRNA": result["gRNA"],
-                "OffTargetPos": detail["Position"],
-                "Mismatches": detail["Mismatches"],
-                "TargetSeq": detail["Sequence"]
-            })
-    return pd.DataFrame(flat)
+    return pd.DataFrame(results)
 
 def safe_translate(seq):
     extra = len(seq) % 3
