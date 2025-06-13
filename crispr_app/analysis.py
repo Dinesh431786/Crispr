@@ -1,5 +1,4 @@
 from Bio.Seq import Seq
-from difflib import Differ
 import pandas as pd
 
 def hybrid_score(guide, off_target_count=0):
@@ -16,12 +15,12 @@ def hybrid_score(guide, off_target_count=0):
         score += 0.05
     score -= 0.05 * off_target_count
     score = max(score, 0.0)
-    score = min(score, 1.0)  # Cap at 1.0
+    score = min(score, 1.0)
     return round(score, 3)
 
 def ml_gRNA_score(guide):
     gc = (guide.count('G') + guide.count('C')) / len(guide)
-    score = 0.5  # baseline
+    score = 0.5
     if 0.40 < gc < 0.60:
         score += 0.2
     elif 0.35 < gc <= 0.40 or 0.60 <= gc < 0.65:
@@ -36,11 +35,11 @@ def ml_gRNA_score(guide):
         score += 0.05
     if guide[0] == "T":
         score -= 0.05
-    score = max(0.0, min(score, 1.0))  # Clamp between 0.0 and 1.0
+    score = max(0.0, min(score, 1.0))
     return round(score, 3)
 
 def check_pam(pam_seq, pam):
-    # Now supports NG, NGG, NAG, TTTV
+    pam_seq = pam_seq.upper()
     if pam == "NGG":
         return len(pam_seq) == 3 and pam_seq[1:] == "GG"
     elif pam == "NAG":
@@ -55,23 +54,24 @@ def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70, add_5p
     sequence = dna_seq.upper().replace("\n", "").replace(" ", "")
     pam_len = 2 if pam == "NG" else (4 if pam == "TTTV" else 3)
     guides = []
+    # Forward strand
     for i in range(len(sequence) - guide_length - pam_len + 1):
         guide = sequence[i:i+guide_length]
         pam_seq = sequence[i+guide_length:i+guide_length+pam_len]
         if check_pam(pam_seq, pam):
             gc = (guide.count('G') + guide.count('C')) / guide_length * 100
             if min_gc <= gc <= max_gc and "TTTT" not in guide:
-                # U6 promoter option: Add G at 5' end if not present
+                g_out = guide
                 if add_5prime_g and not guide.startswith("G"):
-                    guide = "G" + guide[:-1]
+                    g_out = "G" + guide[:-1]
                 guides.append({
                     "Strand": "+",
                     "Start": i,
-                    "gRNA": guide,
+                    "gRNA": g_out,
                     "PAM": pam_seq,
                     "GC%": round(gc,2),
                 })
-    # Scan reverse complement (minus strand)
+    # Reverse complement
     rc_sequence = str(Seq(sequence).reverse_complement())
     for i in range(len(rc_sequence) - guide_length - pam_len + 1):
         guide = rc_sequence[i:i+guide_length]
@@ -79,26 +79,37 @@ def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70, add_5p
         if check_pam(pam_seq, pam):
             gc = (guide.count('G') + guide.count('C')) / guide_length * 100
             if min_gc <= gc <= max_gc and "TTTT" not in guide:
+                g_out = guide
                 if add_5prime_g and not guide.startswith("G"):
-                    guide = "G" + guide[:-1]
+                    g_out = "G" + guide[:-1]
                 guides.append({
                     "Strand": "-",
                     "Start": len(sequence)-i-guide_length-pam_len,
-                    "gRNA": guide,
+                    "gRNA": g_out,
                     "PAM": pam_seq,
                     "GC%": round(gc,2),
                 })
     return pd.DataFrame(guides)
 
+def count_mismatches(a, b):
+    # Strict mismatch: must be same length and both uppercase
+    a = a.upper()
+    b = b.upper()
+    if len(a) != len(b):
+        return float('inf')
+    return sum(1 for x, y in zip(a, b) if x != y)
+
 def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
     results = []
-    bg_seq = background_seq.upper().replace('\n', '')[:1_000_000]
+    bg_seq = background_seq.upper().replace('\n', '').replace(' ', '')[:1_000_000]
     for _, row in guides.iterrows():
-        guide = row["gRNA"]
+        guide = row["gRNA"].upper()
         details = []
         for i in range(len(bg_seq) - len(guide) + 1):
             window = bg_seq[i:i+len(guide)]
-            mismatches = sum(1 for a, b in zip(guide, window) if a != b)
+            if len(window) != len(guide):
+                continue
+            mismatches = count_mismatches(guide, window)
             if mismatches <= max_mismatches:
                 details.append({
                     "Position": i,
@@ -157,7 +168,6 @@ def simulate_protein_edit(seq, cut_index, edit_type="del1", insert_base="A", sub
     return prot_before, prot_after, frameshift, stop_lost
 
 def diff_proteins(before, after):
-    # Show amino acid differences with positions
     result = []
     for i, (a, b) in enumerate(zip(before, after), 1):
         if a != b:
