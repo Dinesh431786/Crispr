@@ -14,10 +14,6 @@ A **fast, user-friendly web app** for designing, scoring, and analyzing CRISPR g
 **A fast, user-friendly web app for designing, scoring, and analyzing CRISPR guide RNAs (gRNAs).**
 
 
-## 🎬 Demo Video
-  
-▶️ **[Watch on YouTube](https://youtu.be/UJgdxXRIWns)**
-
 
 ## 🎯 Unique Features
 
