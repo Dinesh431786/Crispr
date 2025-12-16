@@ -1,5 +1,6 @@
 from Bio.Seq import Seq
 import pandas as pd
+import streamlit as st
 
 def hybrid_score(guide, off_target_count=0):
     gc = (guide.count('G') + guide.count('C')) / len(guide)
@@ -50,6 +51,7 @@ def check_pam(pam_seq, pam):
         return len(pam_seq) == 4 and pam_seq[:3] == "TTT" and pam_seq[3] in "ACG"
     return False
 
+@st.cache_data
 def find_gRNAs(dna_seq, pam="NGG", guide_length=20, min_gc=40, max_gc=70, add_5prime_g=False):
     sequence = dna_seq.upper().replace("\n", "").replace(" ", "")
     pam_len = 2 if pam == "NG" else (4 if pam == "TTTV" else 3)
@@ -99,26 +101,31 @@ def count_mismatches(a, b):
         return float('inf')
     return sum(1 for x, y in zip(a, b) if x != y)
 
+@st.cache_data
 def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
-    # Improved: returns ALL windows up to max_mismatches, never just perfect matches!
+    """
+    Finds off-target sites for a list of gRNAs in a background sequence.
+    Caches results to avoid re-computation for the same inputs.
+    """
     results = []
     bg_seq = background_seq.upper().replace('\n', '').replace(' ', '')[:1_000_000]
-    for _, row in guides.iterrows():
-        guide = row["gRNA"].upper()
-        guide_len = len(guide)
+
+    # If not in cache, compute
+    for guide_seq in guides["gRNA"].unique():
+        guide_len = len(guide_seq)
         for i in range(len(bg_seq) - guide_len + 1):
             window = bg_seq[i:i+guide_len]
-            if len(window) != guide_len:
-                continue
-            mismatches = count_mismatches(guide, window)
+            mismatches = count_mismatches(guide_seq, window)
             if mismatches <= max_mismatches:
                 results.append({
-                    "gRNA": guide,
+                    "gRNA": guide_seq,
                     "OffTargetPos": i,
                     "Mismatches": mismatches,
                     "TargetSeq": window
                 })
-    return pd.DataFrame(results)
+    
+    df_results = pd.DataFrame(results)
+    return df_results
 
 def safe_translate(seq):
     extra = len(seq) % 3
