@@ -101,27 +101,63 @@ def count_mismatches(a, b):
         return float('inf')
     return sum(1 for x, y in zip(a, b) if x != y)
 
+# CFD mismatch scores from CRISPOR
+CFD_SCORES = {
+    'rA:dA': 1.0, 'rA:dC': 1.0, 'rA:dG': 0.857, 'rA:dT': 1.0,
+    'rC:dA': 1.0, 'rC:dC': 0.913, 'rC:dG': 1.0, 'rC:dT': 1.0,
+    'rG:dA': 1.0, 'rG:dC': 1.0, 'rG:dG': 0.714, 'rG:dT': 0.9,
+    'rU:dA': 1.0, 'rU:dC': 0.957, 'rU:dG': 0.857, 'rU:dT': 1.0
+}
+PAM_SCORES = {
+    'AA': 0.0, 'AC': 0.0, 'AG': 0.259, 'AT': 0.0,
+    'CA': 0.0, 'CC': 0.0, 'CG': 0.107, 'CT': 0.0,
+    'GA': 0.069, 'GC': 0.022, 'GG': 1.0, 'GT': 0.016,
+    'TA': 0.0, 'TC': 0.0, 'TG': 0.039, 'TT': 0.0
+}
+
+def calculate_cfd_score(guide_seq, off_target_seq, pam):
+    """
+    Calculates the Cutting Frequency Determination (CFD) score for a given gRNA and off-target sequence.
+    """
+    score = 1.0
+    guide_seq = guide_seq.upper().replace('T', 'U')
+    off_target_seq = off_target_seq.upper()
+
+    for i in range(len(guide_seq)):
+        if guide_seq[i] != off_target_seq[i]:
+            key = 'r' + guide_seq[i] + ':d' + off_target_seq[i]
+            score *= CFD_SCORES.get(key, 1.0)
+
+    pam_key = pam[1:]
+    score *= PAM_SCORES.get(pam_key, 0.0)
+    return score
+
 @st.cache_data
-def find_off_targets_detailed(guides, background_seq, max_mismatches=2):
+def find_off_targets_detailed(guides, background_seq, max_mismatches=2, pam="NGG"):
     """
     Finds off-target sites for a list of gRNAs in a background sequence.
     Caches results to avoid re-computation for the same inputs.
     """
     results = []
     bg_seq = background_seq.upper().replace('\n', '').replace(' ', '')[:1_000_000]
+    pam_len = 3 if pam in ["NGG", "NAG"] else (2 if pam == "NG" else 4)
 
     # If not in cache, compute
     for guide_seq in guides["gRNA"].unique():
         guide_len = len(guide_seq)
-        for i in range(len(bg_seq) - guide_len + 1):
+        for i in range(len(bg_seq) - guide_len - pam_len + 1):
             window = bg_seq[i:i+guide_len]
             mismatches = count_mismatches(guide_seq, window)
-            if mismatches <= max_mismatches:
+            if 0 < mismatches <= max_mismatches:
+                pam_seq = bg_seq[i+guide_len:i+guide_len+pam_len]
+                cfd_score = calculate_cfd_score(guide_seq, window, pam_seq)
                 results.append({
                     "gRNA": guide_seq,
                     "OffTargetPos": i,
                     "Mismatches": mismatches,
-                    "TargetSeq": window
+                    "TargetSeq": window,
+                    "PAM": pam_seq,
+                    "CFD_Score": cfd_score
                 })
 
     df_results = pd.DataFrame(results)

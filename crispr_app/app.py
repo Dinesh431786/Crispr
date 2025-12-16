@@ -155,23 +155,27 @@ elif step == steps[3]:
         if not ok:
             st.error("Background sequence must be valid DNA (A/T/C/G/N), not a gRNA.")
         else:
-            result_from_find = find_off_targets_detailed(df, bg_seq, max_mm)
+            pam_label = st.session_state.get("pam", "Cas9 NGG")
+            pam = {"Cas9 NGG": "NGG", "Cas9 NAG": "NAG", "Cas9 NG": "NG", "Cas12a TTTV": "TTTV"}.get(pam_label, "NGG")
+            result_from_find = find_off_targets_detailed(df, bg_seq, max_mm, pam=pam)
             st.session_state.offtargets = result_from_find
             scores = {}
-            if result_from_find is not None and not result_from_find.empty and "gRNA" in result_from_find.columns and "Mismatches" in result_from_find.columns:
+            if result_from_find is not None and not result_from_find.empty and "gRNA" in result_from_find.columns and "CFD_Score" in result_from_find.columns:
                 for g in df.gRNA:
                     subset = result_from_find[result_from_find["gRNA"] == g]
                     if subset.empty:
                         scores[g] = 1.0
                     else:
-                        scores[g] = round(1.0 / (1 + subset["Mismatches"].sum()), 3)
+                        scores[g] = round(1.0 / (1 + subset["CFD_Score"].sum()), 3)
             else:
                 scores = {g: 1.0 for g in df.gRNA}
             st.session_state.guide_scores = scores
     ot_df = st.session_state.offtargets
     if ot_df is not None and not ot_df.empty:
         st.subheader("Off-target Results")
-        st.dataframe(ot_df, use_container_width=True)
+        # Sort by CFD score to show the most likely off-targets first
+        ot_df = ot_df.sort_values(by="CFD_Score", ascending=False).reset_index(drop=True)
+        st.dataframe(ot_df[["gRNA", "TargetSeq", "PAM", "Mismatches", "CFD_Score"]], use_container_width=True)
         st.download_button("⬇️ Download off-targets", ot_df.to_csv(index=False), "offtargets.csv")
     elif ot_df is not None and ot_df.empty:
         st.subheader("Off-target Results")
