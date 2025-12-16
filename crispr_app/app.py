@@ -78,7 +78,7 @@ elif step == steps[1]:
         else:
             with st.spinner("Finding gRNAs..."):
                 df = find_gRNAs(
-                    st.session_state.dna_seq, pam, guide_len, min_gc, max_gc
+                    st.session_state.dna_seq, pam, guide_len, min_gc, max_gc, add_5prime_g=u6_toggle
                 )
                 if df.empty:
                     st.error("No gRNAs found for these settings.")
@@ -86,8 +86,6 @@ elif step == steps[1]:
                     df["HybridScore"] = [hybrid_score(g) for g in df.gRNA]
                     df["MLScore"] = [ml_gRNA_score(g) for g in df.gRNA]
                     df["ConsensusScore"] = ((df["HybridScore"] + df["MLScore"]) / 2).clip(upper=1.0)
-                    if u6_toggle:
-                        df["gRNA"] = df["gRNA"].apply(lambda g: g if g.startswith("G") else "G" + g[:-1])
                     st.session_state.df_guides = df
                     st.success(f"Found {len(df)} gRNAs! See results below.")
 
