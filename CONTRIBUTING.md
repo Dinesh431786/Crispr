@@ -34,8 +34,9 @@ Your help—big or small—improves this tool for everyone.
 
 ## App Testing
 
-- If possible, test your changes with `streamlit run app.py` before submitting a PR.
+- If possible, test your changes with `uvicorn main:app --reload` from `crispr_app/` before submitting a PR.
 - Make sure the app launches and runs without errors.
+- Keep the app deterministic: avoid re-introducing Gemini/OpenAI/LLM explainer dependencies.
 
 ---
 

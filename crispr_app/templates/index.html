@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CRISPR Precision Studio</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>🧬 CRISPR Precision Studio</h1>
+      <p>Research-informed gRNA design, off-target discovery, and edit simulation in one workflow.</p>
+      <p class="pill">No Gemini/OpenAI integration: this build is deterministic and API-key free.</p>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>1) Sequence Input</h2>
+        <textarea id="dna" rows="8" placeholder="Paste DNA sequence (A/T/C/G)"></textarea>
+        <div class="grid">
+          <label>PAM
+            <select id="pam">
+              <option value="NGG">Cas9 NGG</option>
+              <option value="NAG">Cas9 NAG</option>
+              <option value="NG">Cas9 NG</option>
+              <option value="TTTV">Cas12a TTTV</option>
+            </select>
+          </label>
+          <label>Guide length <input type="number" id="guideLength" value="20" min="18" max="25" /></label>
+          <label>Min GC <input type="number" id="minGc" value="40" min="30" max="80" /></label>
+          <label>Max GC <input type="number" id="maxGc" value="70" min="40" max="90" /></label>
+        </div>
+        <button id="designBtn">Find High-Confidence gRNAs</button>
+      </section>
+
+      <section class="card">
+        <h2>2) Ranked gRNAs</h2>
+        <p id="guideSummary">No guides yet.</p>
+        <div class="table-wrap"><table id="guidesTable"></table></div>
+      </section>
+
+      <section class="card">
+        <h2>3) Off-target Search</h2>
+        <textarea id="background" rows="5" placeholder="Paste background DNA for off-target scan"></textarea>
+        <label>Max mismatches <input type="number" id="maxMm" value="2" min="0" max="4" /></label>
+        <button id="offBtn">Scan Off-targets</button>
+        <p id="offSummary">No scan yet.</p>
+        <div class="table-wrap"><table id="offTable"></table></div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
