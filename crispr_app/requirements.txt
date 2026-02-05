@@ -1,8 +1,6 @@
-streamlit
+fastapi
+uvicorn[standard]
+jinja2
 biopython
-dna-features-viewer
 pandas
-google-generativeai
-openai
-plotly
-tabulate
+python-multipart

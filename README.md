@@ -1,108 +1,149 @@
-# 🧬 CRISPR Guide RNA Designer
+# CRISPR Precision Studio
 
-A **fast, user-friendly web app** for designing, scoring, and analyzing CRISPR guide RNAs (gRNAs) — **no coding required**.
+CRISPR Precision Studio is an API-first guide RNA design and analysis platform engineered for high-confidence candidate prioritization, rapid iteration, and reproducible scientific workflows.
 
----
+## Executive Summary
 
-## 🚀 Try It Now
+This project provides a modern CRISPR design stack with:
 
-- [Launch the app on Streamlit](https://crispr-voxelta.streamlit.app/)  
-- **Free. Open source. No login required.**
+- high-throughput gRNA discovery across multiple PAM families,
+- consensus scoring for on-target activity prioritization,
+- off-target risk profiling using mismatch and CFD-style scoring,
+- edit outcome simulation support for downstream experimental planning,
+- a responsive web interface backed by a production-ready FastAPI service.
 
-# 🧬 CRISPR Guide RNA Designer
-
-**A fast, user-friendly web app for designing, scoring, and analyzing CRISPR guide RNAs (gRNAs).**
-
-
-
-## 🎯 Unique Features
-
-- **Zero setup:** Paste a DNA sequence or upload a FASTA file
-- **Multiple PAMs:** Cas9 (NGG, NAG) & Cas12a (TTTV) supported
-- **Hybrid & ML-inspired scoring:** Rule-based plus data-inspired consensus
-- **Off-target scan:** Use any DNA as a custom background to spot risk sites
-- **U6 promoter toggle:** One-click “add G at 5’” for U6/T7 promoters
-- **Indel/protein simulation:** Visualize the effect of edits
-- **AI reporting:** One-click Gemini/OpenAI-powered gRNA summaries
-- **Download results:** CSV export for guides and off-targets
-- **Modern UX:** Streamlit-based, works on desktop & mobile
-- **MIT Licensed:** Use, share, fork, or modify
+The goal is simple: deliver a rigorous, extensible platform that can be benchmarked transparently and improved continuously against state-of-the-art baselines.
 
 ---
 
-## 👥 Who is this for?
+## Core Capabilities
 
-- Molecular, plant, or biomedical researchers
-- Academic labs and classroom use
-- Biotech & R&D teams (fast pilot CRISPR projects)
-- Students, DIY bio, and open-science community
-
----
-
-## 🛠️ How to Use
-
-1. **Open the app** (see link above)
-2. **Paste DNA** or **upload FASTA**
-3. **Select PAM/parameters** in the sidebar
-4. *(Optional)* Toggle **U6 Promoter** for gRNA with 5' G
-5. Click **Find gRNAs**
-6. Review and **download results**
-7. *(Optional)* Paste background DNA to scan off-targets
-8. *(Optional)* Run indel/protein simulation or AI-powered report
-
----
-
-## 📊 Scoring Methodology
-
-**Hybrid Score**: Based on established lab rules (GC content, homopolymers, seed region, off-target penalty, terminal base).  
-**ML-inspired Score**: Derived from features found in ML studies of gRNA efficacy (but not a trained ML model).  
-**Consensus Score**: Balanced average of the two for ranking.
-
-> **Note:** Scores help prioritize guides, but do not replace experimental validation.
+- **Multi-PAM guide discovery**
+  - Cas9: `NGG`, `NAG`, `NG`
+  - Cas12a: `TTTV`
+- **Consensus ranking pipeline**
+  - Hybrid sequence-quality score
+  - ML-inspired feature score
+  - Combined consensus score for candidate ordering
+- **Off-target assessment**
+  - configurable mismatch thresholds
+  - CFD-style risk weighting
+- **Edit impact simulation**
+  - insertion/deletion scenarios
+  - translated protein effect previews
+- **API + web app delivery**
+  - FastAPI backend
+  - lightweight browser UI for bench scientists and translational teams
 
 ---
 
-## 📝 Installation (For Local Use)
+
+## Production Readiness Upgrades
+
+- strict request validation with typed payload models and PAM allow-lists,
+- API-level request tracing headers (`X-Request-Id`, `X-Elapsed-Ms`),
+- structured error payloads for stable client integration,
+- indexed off-target candidate generation for better scalability at larger background sizes,
+- bidirectional (forward + reverse) off-target scanning support for improved sensitivity.
+
+## System Architecture
+
+```text
+Frontend (HTML/CSS/JS)
+        |
+        v
+FastAPI service (main.py)
+        |
+        +--> guide discovery + scoring engine (analysis.py)
+        +--> sequence utilities/validation (utils.py)
+        +--> simulation and off-target workflows
+```
+
+This separation keeps the stack clean, testable, and deployment-ready for local, cloud, or internal lab infrastructure.
+
+---
+
+## Benchmarking Strategy (for top-tier performance)
+
+To evaluate and improve against leading tools and commercial-grade standards, use a reproducible benchmark harness with the following protocol:
+
+1. **Dataset design**
+   - curated validated guides with measured editing outcomes,
+   - stratification by species, locus type, GC bands, and PAM class.
+2. **Primary metrics**
+   - ranking metrics: Spearman/Pearson, NDCG@k,
+   - classification metrics: AUROC, AUPRC for high-activity guide selection,
+   - off-target screening metrics: recall/precision at mismatch thresholds.
+3. **Latency metrics**
+   - p50/p95 response times for `/api/design` and `/api/offtargets`,
+   - throughput at concurrent load.
+4. **Reproducibility controls**
+   - fixed software versions,
+   - immutable test sets,
+   - versioned benchmark reports committed with each model/scoring revision.
+
+### Performance Improvement Roadmap
+
+- integrate experimentally grounded feature expansions (position-specific signals, thermodynamic terms),
+- add optional pluggable model backends with strict benchmark gating,
+- profile and optimize hot loops for larger genomic backgrounds,
+- introduce CI benchmark checks to prevent regression in ranking quality and latency.
+
+---
+
+## Getting Started
+
+### 1) Install
 
 ```bash
-git clone https://github.com/Dinesh431786/Crispr.git
-cd crispr/crispr_app
+cd crispr_app
 pip install -r requirements.txt
-streamlit run app.py
+```
 
-🔑 AI API Keys
-Gemini (Google): Get API key
+### 2) Run
 
-OpenAI: Get API key
+```bash
+uvicorn main:app --reload
+```
 
-Paste your key in the app sidebar for AI-powered explanations.
+Open: `http://127.0.0.1:8000`
 
-🧪 Example FASTA
-fasta
-Copy
-Edit
->TestGene
-ATGAGTCTGCTCTTCGCGTTGGAGTGAAATCTGAGATGATGGGTTGAAATCGCAGTTCGACCTGAACTTTTATCTGCTCTTCGCGTTGAGCGGACCGTGGGAAGTTTCGCGTTGATCAGTTCTTCTGCTCTTCGCGTTTAAGCCTTGCGTTGTTTATCTGCTCTTCGCGTTTATCAGCCTGGGCGTTGATCTTTTATCTGCTCTTCGCGTTAACGGAAGCCGG
-🙋 FAQ
-Is it free?
-Yes, open source and free for all.
+---
 
-Does it use real ML?
-No, scoring is based on published ML findings but is rule-based.
+## API Reference
 
-Species?
-Works for any DNA (human, plant, animal, microbe, synthetic).
+- `GET /health` — service health
+- `POST /api/design` — gRNA design and ranking
+- `POST /api/offtargets` — off-target search and scoring
+- `POST /api/simulate` — edit simulation output
 
-AI required?
-All core features work without AI. AI summary is optional with API key.
+---
 
-🤝 Contributing
-Pull requests, feedback, and bug reports welcome!
-See CONTRIBUTING.md for details.
+## Repository Layout
 
-👨‍🔬 Author
-Dinesh K — design, code, and documentation
-GitHub
+```text
+crispr_app/
+  main.py                # FastAPI application
+  analysis.py            # scoring, guide discovery, off-target and simulation logic
+  utils.py               # sequence validation and parsing helpers
+  templates/index.html   # web interface markup
+  static/style.css       # UI styling
+  static/app.js          # UI interactions with API
+tests/
+  test_analysis.py
+  test_dependencies.py
+```
 
-⚖️ License
-MIT License — free for all use.
+---
+
+## Scientific and Product Positioning
+
+CRISPR Precision Studio is built for teams that require **measurable quality**, **transparent methodology**, and **rapid operational iteration**.
+
+Comparative superiority claims should always be made from formal benchmark evidence on shared datasets and clearly reported metrics.
+
+---
+
+## License
+
+MIT
