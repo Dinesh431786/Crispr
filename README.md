@@ -1,108 +1,50 @@
-# 🧬 CRISPR Guide RNA Designer
+# 🧬 CRISPR Precision Studio
 
-A **fast, user-friendly web app** for designing, scoring, and analyzing CRISPR guide RNAs (gRNAs) — **no coding required**.
+A modern CRISPR guide design platform with a FastAPI backend and a responsive web UI (no Streamlit).
 
----
+## What changed
 
-## 🚀 Try It Now
+- ✅ Streamlit UI removed.
+- ✅ New API-first architecture for speed and cleaner separation of concerns.
+- ✅ Updated scoring pipeline with research-informed sequence features.
+- ✅ Better UX: single-page interface for design + off-target analysis.
 
-- [Launch the app on Streamlit](https://crispr-voxelta.streamlit.app/)  
-- **Free. Open source. No login required.**
+## Key capabilities
 
-# 🧬 CRISPR Guide RNA Designer
+- Multi-PAM gRNA search (`NGG`, `NAG`, `NG`, `TTTV`)
+- Consensus ranking from:
+  - **Hybrid score** (rule-based sequence quality)
+  - **ML-inspired score** (feature-engineered surrogate)
+- Off-target scanning with mismatch limits + CFD scoring
+- Protein edit/indel simulation API
 
-**A fast, user-friendly web app for designing, scoring, and analyzing CRISPR guide RNAs (gRNAs).**
+## Removed scope: AI/LLM explainers
 
+- Gemini/OpenAI explainers were intentionally removed.
+- The project now focuses on reproducible guide design, scoring, and off-target analysis only.
+- No external LLM API keys are required for any core workflow.
 
-
-## 🎯 Unique Features
-
-- **Zero setup:** Paste a DNA sequence or upload a FASTA file
-- **Multiple PAMs:** Cas9 (NGG, NAG) & Cas12a (TTTV) supported
-- **Hybrid & ML-inspired scoring:** Rule-based plus data-inspired consensus
-- **Off-target scan:** Use any DNA as a custom background to spot risk sites
-- **U6 promoter toggle:** One-click “add G at 5’” for U6/T7 promoters
-- **Indel/protein simulation:** Visualize the effect of edits
-- **AI reporting:** One-click Gemini/OpenAI-powered gRNA summaries
-- **Download results:** CSV export for guides and off-targets
-- **Modern UX:** Streamlit-based, works on desktop & mobile
-- **MIT Licensed:** Use, share, fork, or modify
-
----
-
-## 👥 Who is this for?
-
-- Molecular, plant, or biomedical researchers
-- Academic labs and classroom use
-- Biotech & R&D teams (fast pilot CRISPR projects)
-- Students, DIY bio, and open-science community
-
----
-
-## 🛠️ How to Use
-
-1. **Open the app** (see link above)
-2. **Paste DNA** or **upload FASTA**
-3. **Select PAM/parameters** in the sidebar
-4. *(Optional)* Toggle **U6 Promoter** for gRNA with 5' G
-5. Click **Find gRNAs**
-6. Review and **download results**
-7. *(Optional)* Paste background DNA to scan off-targets
-8. *(Optional)* Run indel/protein simulation or AI-powered report
-
----
-
-## 📊 Scoring Methodology
-
-**Hybrid Score**: Based on established lab rules (GC content, homopolymers, seed region, off-target penalty, terminal base).  
-**ML-inspired Score**: Derived from features found in ML studies of gRNA efficacy (but not a trained ML model).  
-**Consensus Score**: Balanced average of the two for ranking.
-
-> **Note:** Scores help prioritize guides, but do not replace experimental validation.
-
----
-
-## 📝 Installation (For Local Use)
+## Run locally
 
 ```bash
-git clone https://github.com/Dinesh431786/Crispr.git
-cd crispr/crispr_app
+cd crispr_app
 pip install -r requirements.txt
-streamlit run app.py
+uvicorn main:app --reload
+```
 
-🔑 AI API Keys
-Gemini (Google): Get API key
+Open: `http://127.0.0.1:8000`
 
-OpenAI: Get API key
+## API quick reference
 
-Paste your key in the app sidebar for AI-powered explanations.
+- `GET /health`
+- `POST /api/design`
+- `POST /api/offtargets`
+- `POST /api/simulate`
 
-🧪 Example FASTA
-fasta
-Copy
-Edit
->TestGene
-ATGAGTCTGCTCTTCGCGTTGGAGTGAAATCTGAGATGATGGGTTGAAATCGCAGTTCGACCTGAACTTTTATCTGCTCTTCGCGTTGAGCGGACCGTGGGAAGTTTCGCGTTGATCAGTTCTTCTGCTCTTCGCGTTTAAGCCTTGCGTTGTTTATCTGCTCTTCGCGTTTATCAGCCTGGGCGTTGATCTTTTATCTGCTCTTCGCGTTAACGGAAGCCGG
-🙋 FAQ
-Is it free?
-Yes, open source and free for all.
+## Notes on scientific claims
 
-Does it use real ML?
-No, scoring is based on published ML findings but is rule-based.
+This repository now has stronger engineering and better model heuristics, but it does **not** claim guaranteed "10x faster" or "10x more accurate" outcomes versus any external proprietary model. Experimental validation remains essential.
 
-Species?
-Works for any DNA (human, plant, animal, microbe, synthetic).
+## License
 
-AI required?
-All core features work without AI. AI summary is optional with API key.
-
-🤝 Contributing
-Pull requests, feedback, and bug reports welcome!
-See CONTRIBUTING.md for details.
-
-👨‍🔬 Author
-Dinesh K — design, code, and documentation
-GitHub
-
-⚖️ License
-MIT License — free for all use.
+MIT
