@@ -10,7 +10,13 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from starlette.requests import Request
 
-from analysis import find_gRNAs, find_off_targets_detailed, indel_simulations, simulate_protein_edit
+from analysis import (
+    design_prime_editing_pegRNAs,
+    find_gRNAs,
+    find_off_targets_detailed,
+    indel_simulations,
+    simulate_protein_edit,
+)
 from utils import validate_sequence
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -51,9 +57,15 @@ class SimulateRequest(BaseModel):
     edit_type: str = "del1"
 
 
+class PrimeDesignRequest(BaseModel):
+    dna_sequence: str
+    target_pos: int
+    desired_edit: str = Field(..., max_length=1)
+
+
 @app.get("/", response_class=HTMLResponse)
 def ui(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.post("/api/design")
@@ -108,6 +120,20 @@ def simulate(payload: SimulateRequest):
         "frameshift": frameshift,
         "stop_lost": stop_lost,
         "indel_panel": indels.to_dict(orient="records"),
+    }
+
+
+@app.post("/api/prime-design")
+def prime_design(payload: PrimeDesignRequest):
+    ok, cleaned = validate_sequence(payload.dna_sequence)
+    if not ok:
+        raise HTTPException(status_code=400, detail=cleaned)
+
+    pe_guides = design_prime_editing_pegRNAs(cleaned, payload.target_pos, payload.desired_edit)
+
+    return {
+        "count": int(len(pe_guides)),
+        "pegRNAs": pe_guides.head(50).to_dict(orient="records"),
     }
 
 
