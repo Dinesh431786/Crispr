@@ -11,11 +11,11 @@ A modern CRISPR guide design platform with a FastAPI backend and a responsive we
 
 ## Key capabilities
 
-- **10x More Accurate Scoring**: Advanced on-target ranking incorporating:
+- **More Accurate Scoring**: Advanced on-target ranking incorporating:
   - Position-specific nucleotide preferences (Doench 2016).
   - Melting Temperature ($T_m$) calculations via Nearest-Neighbor thermodynamics.
   - Multi-PAM support (`NGG`, `NAG`, `NG`, `TTTV`).
-- **10x Lightweight Performance**:
+- **1ightweight Performance**:
   - Off-target engine rewritten using **NumPy vectorization** and sliding window views.
   - Sub-millisecond scanning of kilobase-scale sequences on standard hardware.
 - **Novel "Science-Shaking" Feature: Prime Editing Studio**:
