@@ -2,7 +2,7 @@ let cachedGuides = [];
 
 const toTable = (elementId, rows) => {
   const table = document.getElementById(elementId);
-  if (!rows.length) {
+  if (!rows || !rows.length) {
     table.innerHTML = "";
     return;
   }
@@ -62,4 +62,25 @@ document.getElementById("offBtn").onclick = async () => {
 
   document.getElementById("offSummary").innerText = `Found ${data.count} candidate off-target loci.`;
   toTable("offTable", data.off_targets.slice(0, 30));
+};
+
+document.getElementById("primeBtn").onclick = async () => {
+  const payload = {
+    dna_sequence: document.getElementById("dna").value,
+    target_pos: Number(document.getElementById("primePos").value),
+    desired_edit: document.getElementById("primeBase").value,
+  };
+
+  const resp = await fetch("/api/prime-design", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    alert(data.detail || "Prime design failed");
+    return;
+  }
+
+  toTable("primeTable", data.pegRNAs);
 };

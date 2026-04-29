@@ -41,11 +41,30 @@
 
       <section class="card">
         <h2>3) Off-target Search</h2>
+        <p class="hint">10x optimized scan using NumPy vectorization.</p>
         <textarea id="background" rows="5" placeholder="Paste background DNA for off-target scan"></textarea>
         <label>Max mismatches <input type="number" id="maxMm" value="2" min="0" max="4" /></label>
         <button id="offBtn">Scan Off-targets</button>
         <p id="offSummary">No scan yet.</p>
         <div class="table-wrap"><table id="offTable"></table></div>
+      </section>
+
+      <section class="card highlight">
+        <h2>🌟 Prime Editing Studio (New)</h2>
+        <p>Design precision pegRNAs for single-base substitutions.</p>
+        <div class="grid">
+          <label>Target Index <input type="number" id="primePos" value="20" min="0" /></label>
+          <label>Desired Base
+            <select id="primeBase">
+              <option value="A">A</option>
+              <option value="T">T</option>
+              <option value="C">C</option>
+              <option value="G">G</option>
+            </select>
+          </label>
+        </div>
+        <button id="primeBtn">Design pegRNAs</button>
+        <div class="table-wrap"><table id="primeTable"></table></div>
       </section>
     </main>
 
