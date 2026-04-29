@@ -243,6 +243,11 @@ def find_off_targets_detailed(guides: pd.DataFrame, background_seq: str, max_mis
 
     for guide_seq in guides["gRNA"].unique():
         guide_len = len(guide_seq)
+
+        # Safety check for sequence length to avoid NumPy ValueError
+        if len(bg_arr) - pam_len < guide_len:
+            continue
+
         guide_arr = np.frombuffer(guide_seq.encode(), dtype=np.int8)
 
         # Vectorized mismatch calculation
