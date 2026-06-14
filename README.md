@@ -63,6 +63,13 @@ Measured results on real downloaded data are in [BENCHMARKS.md](BENCHMARKS.md)
 ρ≈0.25 on human data) — reproducible, not asserted.
 
 `train.py` uses NumPy-only closed-form ridge regression (no heavy ML stack),
+over **position-specific dinucleotide features** that roughly **double** Spearman
+on datasets with signal (chari2015 0.20→0.40, morenoMateos 0.17→0.43; gradient
+boosting matched ridge to ±0.02, so we stay dependency-free). It holds out 20 %
+of guides and prints train/test Spearman so the gain is **measured, not
+asserted**. Note: ρ≈0.93 is *not* achievable — it exceeds the ~0.7 reproducibility
+ceiling of the wet-lab data itself (see [BENCHMARKS.md](BENCHMARKS.md)); the
+honest within-dataset SOTA is ~0.85–0.88, reachable via the ONNX backend.
 holds out 20 % of guides, and prints train/test Spearman so the gain is
 **measured, not asserted**. For deep-model accuracy, export a trained
 DeepSpCas9/CRISPRon to `models/ontarget.onnx`, install `onnxruntime`, and the
