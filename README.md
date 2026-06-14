@@ -19,6 +19,14 @@ On-target scoring · both-strand off-target specificity · prime-editing pegRNAs
 
 ---
 
+## 📸 The interface
+
+![CRISPR Precision Studio UI](docs/ui.png)
+
+<sub>Rendered automatically by CI on every push — one **Efficiency** score per guide, with a per-feature **Details** breakdown.</sub>
+
+---
+
 ## ✨ Highlights
 
 | | Feature | What it means |
