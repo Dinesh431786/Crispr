@@ -168,6 +168,14 @@ function renderExplain(data) {
 
 /* ---------- actions ---------- */
 
+(async () => {
+  try {
+    const m = await (await fetch("/api/models")).json();
+    $("modelTag").textContent = `on-target model: ${m.active}`;
+    $("modelTag").title = `available: ${m.available.join(", ")}`;
+  } catch (_) { $("modelTag").textContent = "on-target model: heuristic"; }
+})();
+
 $("exampleBtn").onclick = () => { $("dna").value = EXAMPLE_SEQ; $("background").value = EXAMPLE_SEQ; };
 $("clearBtn").onclick = () => { $("dna").value = ""; };
 

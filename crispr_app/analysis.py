@@ -30,6 +30,7 @@ try:  # Works both as top-level modules (uvicorn main:app) and as a package (tes
     from prime import design_prime_editing_pegRNAs
     from scoring import gc_fraction as _gc_fraction
     from scoring import on_target_score
+    from models import predict_on_target
 except ImportError:  # pragma: no cover - import-context fallback
     from .offtarget import (
         CFD_SCORES,
@@ -41,6 +42,7 @@ except ImportError:  # pragma: no cover - import-context fallback
     from .prime import design_prime_editing_pegRNAs
     from .scoring import gc_fraction as _gc_fraction
     from .scoring import on_target_score
+    from .models import predict_on_target
 
 __all__ = [
     "ScoringConfig",
@@ -139,7 +141,7 @@ def find_gRNAs(
         gc = _gc_fraction(guide) * 100
         if min_gc <= gc <= max_gc and "TTTT" not in guide:
             g_out = guide if not add_5prime_g or guide.startswith("G") else f"G{guide[:-1]}"
-            on = on_target_score(g_out, ngg_ctx)
+            on = predict_on_target(g_out, ngg_ctx)
             hy = hybrid_score(g_out)
             guides.append({
                 "Strand": strand,

@@ -30,6 +30,25 @@ Browser renders ranked tables
 No database; everything is computed per request. No external LLM/API keys are
 required for any workflow.
 
+## Train a real model & beat the interpretable baseline
+
+The on-target score is served through a **pluggable registry** (`models.py`)
+that resolves `onnx → learned-linear → heuristic` and reports which backend it
+used (`GET /api/models`, and a `model` field on `/api/design`).
+
+```bash
+# Fit a reproducible linear model on real labelled data (Doench 2016, Kim 2019, …)
+cd crispr_app
+python train.py path/to/dataset.csv      # CSV columns: guide,measured[,ngg_context]
+# -> writes models/linear.json; the API auto-loads it and reports model="linear"
+```
+
+`train.py` uses NumPy-only closed-form ridge regression (no heavy ML stack),
+holds out 20 % of guides, and prints train/test Spearman so the gain is
+**measured, not asserted**. For deep-model accuracy, export a trained
+DeepSpCas9/CRISPRon to `models/ontarget.onnx`, install `onnxruntime`, and the
+registry uses it automatically. See [BENCHMARKS.md](BENCHMARKS.md).
+
 ## Where this tool competes
 
 Honest positioning (see [BENCHMARKS.md](BENCHMARKS.md)): deep models
@@ -100,6 +119,7 @@ Open: `http://127.0.0.1:8000`
 - `POST /api/prime-design` — ranked pegRNAs (Spacer + RTT + PBS) with `Score`
 - `POST /api/explain` — interpretable per-feature breakdown of an on-target score
 - `POST /api/upload-fasta` — parse pasted FASTA / plain DNA into a clean sequence
+- `GET /api/models` — active and available on-target backends
 
 ## Tests
 

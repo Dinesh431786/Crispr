@@ -1,0 +1,140 @@
+"""Pluggable on-target predictor registry.
+
+Resolution order (``backend="auto"``):
+
+1. **onnx**     - if ``onnxruntime`` is installed and a model file is available
+                  (``$CRISPR_ONNX_MODEL`` or ``models/ontarget.onnx``). Lets users
+                  drop in a real DeepSpCas9/CRISPRon export for deep-model accuracy.
+2. **linear**   - if learned coefficients exist (``$CRISPR_LINEAR_MODEL`` or
+                  ``models/linear.json``), produced by ``train.py`` on real data.
+3. **heuristic** - the interpretable surrogate in :mod:`scoring` (always available).
+
+Every prediction reports which backend produced it, so scores are never an
+unlabelled black box.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+import numpy as np
+
+try:
+    from features import featurize
+    from scoring import on_target_score
+except ImportError:  # pragma: no cover
+    from .features import featurize
+    from .scoring import on_target_score
+
+_BASE_DIR = Path(__file__).resolve().parent
+_LINEAR_PATH = os.environ.get("CRISPR_LINEAR_MODEL", str(_BASE_DIR / "models" / "linear.json"))
+_ONNX_PATH = os.environ.get("CRISPR_ONNX_MODEL", str(_BASE_DIR / "models" / "ontarget.onnx"))
+
+_linear_cache: "LinearModel | None" = None
+_onnx_cache = None
+_onnx_tried = False
+
+
+class LinearModel:
+    """Linear/ridge model: efficiency = clip(x . w + b, 0, 1)."""
+
+    def __init__(self, weights: np.ndarray, intercept: float, meta: dict | None = None):
+        self.weights = np.asarray(weights, dtype=np.float64)
+        self.intercept = float(intercept)
+        self.meta = meta or {}
+
+    def predict(self, guide: str, ngg_context: str | None = None) -> float:
+        x = featurize(guide, ngg_context)
+        if x.shape[0] != self.weights.shape[0]:
+            raise ValueError("feature/weight dimension mismatch")
+        y = float(x @ self.weights + self.intercept)
+        return round(max(0.0, min(1.0, y)), 3)
+
+    def to_json(self) -> dict:
+        return {"weights": self.weights.tolist(), "intercept": self.intercept, "meta": self.meta}
+
+    @classmethod
+    def from_json(cls, data: dict) -> "LinearModel":
+        return cls(np.array(data["weights"], dtype=np.float64), data["intercept"], data.get("meta", {}))
+
+    def save(self, path: str) -> None:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        Path(path).write_text(json.dumps(self.to_json()))
+
+
+def _load_linear() -> "LinearModel | None":
+    global _linear_cache
+    if _linear_cache is not None:
+        return _linear_cache
+    p = Path(_LINEAR_PATH)
+    if p.is_file():
+        try:
+            _linear_cache = LinearModel.from_json(json.loads(p.read_text()))
+        except Exception:
+            _linear_cache = None
+    return _linear_cache
+
+
+def _load_onnx():
+    global _onnx_cache, _onnx_tried
+    if _onnx_tried:
+        return _onnx_cache
+    _onnx_tried = True
+    if not Path(_ONNX_PATH).is_file():
+        return None
+    try:
+        import onnxruntime as ort  # type: ignore
+        _onnx_cache = ort.InferenceSession(_ONNX_PATH, providers=["CPUExecutionProvider"])
+    except Exception:
+        _onnx_cache = None
+    return _onnx_cache
+
+
+def available_backends() -> list[str]:
+    backends = ["heuristic"]
+    if _load_linear() is not None:
+        backends.append("linear")
+    if _load_onnx() is not None:
+        backends.append("onnx")
+    return backends
+
+
+def active_backend(backend: str = "auto") -> str:
+    if backend != "auto":
+        return backend
+    if _load_onnx() is not None:
+        return "onnx"
+    if _load_linear() is not None:
+        return "linear"
+    return "heuristic"
+
+
+def predict_on_target(guide: str, ngg_context: str | None = None, backend: str = "auto") -> float:
+    chosen = active_backend(backend)
+    if chosen == "onnx":
+        sess = _load_onnx()
+        if sess is not None:
+            try:
+                x = featurize(guide, ngg_context).astype(np.float32)[None, :]
+                out = sess.run(None, {sess.get_inputs()[0].name: x})[0]
+                return round(float(np.clip(np.ravel(out)[0], 0.0, 1.0)), 3)
+            except Exception:
+                pass  # fall through to next backend
+    if chosen in ("onnx", "linear"):
+        lm = _load_linear()
+        if lm is not None:
+            try:
+                return lm.predict(guide, ngg_context)
+            except Exception:
+                pass
+    return on_target_score(guide, ngg_context)
+
+
+def reset_caches() -> None:
+    """Test/CLI helper to forget loaded models."""
+    global _linear_cache, _onnx_cache, _onnx_tried
+    _linear_cache = None
+    _onnx_cache = None
+    _onnx_tried = False

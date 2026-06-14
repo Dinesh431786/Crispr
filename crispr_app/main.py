@@ -18,6 +18,7 @@ from analysis import (
     simulate_protein_edit,
     summarize_specificity,
 )
+from models import active_backend, available_backends
 from scoring import score_breakdown
 from utils import load_fasta_text, validate_sequence
 
@@ -87,6 +88,7 @@ def design_guides(payload: DesignRequest):
 
     return {
         "count": int(len(guides)),
+        "model": active_backend(),
         "top_guides": guides.head(100).to_dict(orient="records"),
     }
 
@@ -164,6 +166,12 @@ def upload_fasta(payload: FastaRequest):
     if not sequence:
         raise HTTPException(status_code=400, detail=message or "Could not parse FASTA.")
     return {"sequence": sequence, "length": len(sequence), "message": message}
+
+
+@app.get("/api/models")
+def models_info():
+    """Report which on-target backends are available and which is active."""
+    return {"active": active_backend(), "available": available_backends()}
 
 
 @app.get("/health")
