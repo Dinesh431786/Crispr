@@ -3,15 +3,15 @@
 This document is deliberately honest. It states where CRISPR Precision Studio is
 competitive, where it is not, and exactly how to reproduce the numbers.
 
-## Can we reach Spearman ρ = 0.93? No — and here is the measured proof
+## How high can on-target ρ realistically go?
 
-Short answer: **no honest method can, because 0.93 exceeds the noise ceiling of
-the wet-lab data itself.** Across CRISPR datasets with experimental replicates,
-the measured efficiencies correlate with *themselves* only at ρ≈0.71–0.77 — that
-is the hard upper bound on any predictor (Haeussler et al. 2016, Genome Biol.
-17:148). Published state-of-the-art within a single clean dataset reaches
-ρ≈0.85–0.88 (ChromeCRISPR 0.876, CRISPRDB ~0.88, DeepHF/AttCRISPR ~0.87). A model
-scoring 0.93 against measured values would be leaking labels, not predicting.
+There is a hard ceiling set by the data, not the algorithm. Across CRISPR
+datasets with experimental replicates, the measured efficiencies correlate with
+*themselves* only at ρ≈0.71–0.77 — the upper bound on any predictor (Haeussler
+et al. 2016, Genome Biol. 17:148). Published state-of-the-art within a single
+clean dataset reaches ρ≈0.85–0.88 (ChromeCRISPR 0.876, CRISPRDB ~0.88,
+DeepHF/AttCRISPR ~0.87). Any model reporting markedly higher correlation against
+measured values is leaking labels, not predicting.
 
 We also proved the limiter is **data, not the algorithm**, empirically:
 

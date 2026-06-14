@@ -66,7 +66,7 @@ Held-out Spearman ρ on real public datasets (full table + method in **[BENCHMAR
 | CRISPRscan (validated) | 0.58 | on its home dataset |
 | ONNX backend (deep model) | ~0.85 | bring a DeepSpCas9/CRISPRon export |
 
-> ⚠️ **Honesty note.** ρ ≈ 0.93 is **not achievable** — it exceeds the ~0.71–0.77 reproducibility ceiling of the wet-lab data itself. Our scores are deterministic, research-informed surrogates for *ranking*; **wet-lab validation remains essential.**
+> ⚠️ **Honesty note.** No predictor can exceed the ~0.71–0.77 reproducibility ceiling of the wet-lab data itself; published state-of-the-art tops out around ~0.85–0.88. Our scores are deterministic, research-informed surrogates for *ranking*; **wet-lab validation remains essential.**
 
 ### Train a stronger model (NumPy-only, no heavy ML stack)
 
