@@ -31,7 +31,7 @@ On-target scoring · both-strand off-target specificity · prime-editing pegRNAs
 
 | | Feature | What it means |
 |---|---|---|
-| 🎯 | **One Efficiency score** | A single 0–100 number ranks each guide — no column soup. |
+| 🎯 | **One Score** | A single 0–100 prioritization number ranks each guide — no column soup. |
 | 🔍 | **Explainable** | `POST /api/explain` shows the per-feature breakdown behind every score. |
 | 🧬 | **Both-strand off-targets** | Vectorised NumPy scan + per-site **CFD** & **MIT/Hsu** + aggregate specificity. |
 | 🌟 | **Prime Editing Studio** | PRIDICT2.0-informed pegRNA design (Spacer + RTT + PBS). |
@@ -55,7 +55,7 @@ uvicorn main:app --reload
 
 ## 🎯 The score (production)
 
-Each guide gets **one Efficiency score, 0–100** (higher = better), color-coded:
+Each guide gets **one Score, 0–100** (higher = better) — a *relative prioritization* score combining the on-target predictors, **not** a literal % editing rate. Color-coded:
 
 | 🟢 High | 🟡 Moderate | 🔴 Low |
 |:---:|:---:|:---:|

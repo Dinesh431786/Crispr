@@ -82,7 +82,7 @@ function renderGuides(rows) {
   if (!rows.length) { t.innerHTML = `<tbody><tr><td class="empty">No guides matched the GC / quality filters.</td></tr></tbody>`; return; }
   const head = `<thead><tr>
     <th>#</th><th>Strand</th><th>Start</th><th>Guide (5'→3') + PAM</th>
-    <th>GC%</th><th title="Single 0–100 efficiency score used for ranking">Efficiency</th><th></th></tr></thead>`;
+    <th>GC%</th><th title="0–100 prioritization score combining on-target predictors. Relative ranking, not a literal % editing rate.">Score</th><th></th></tr></thead>`;
   const score100 = (v) => {
     const n = Math.round(Number(v) * 100);
     const cls = n >= 60 ? "good" : n >= 40 ? "mid" : "low";
