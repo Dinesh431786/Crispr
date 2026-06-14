@@ -82,20 +82,20 @@ function renderGuides(rows) {
   if (!rows.length) { t.innerHTML = `<tbody><tr><td class="empty">No guides matched the GC / quality filters.</td></tr></tbody>`; return; }
   const head = `<thead><tr>
     <th>#</th><th>Strand</th><th>Start</th><th>Guide (5'→3') + PAM</th>
-    <th>GC%</th><th>On-target</th><th title="Moreno-Mateos 2015, peer-reviewed">CRISPRscan</th>
-    <th>Hybrid</th><th>Consensus</th><th></th></tr></thead>`;
-  const cscan = (v) => (typeof v === "number" ? badge(v) : '<span class="badge" style="background:#ece9dd;color:#7d837a">n/a</span>');
+    <th>GC%</th><th title="Single 0–100 efficiency score used for ranking">Efficiency</th><th></th></tr></thead>`;
+  const score100 = (v) => {
+    const n = Math.round(Number(v) * 100);
+    const cls = n >= 60 ? "good" : n >= 40 ? "mid" : "low";
+    return `<span class="badge ${cls}">${n}</span>`;
+  };
   const body = rows.map((r, i) => `<tr>
     <td>${i + 1}</td>
     <td>${r.Strand}</td>
     <td>${r.Start}</td>
     <td>${seqWithPam(r.gRNA, r.PAM)} ${copyBtn(r.gRNA)}</td>
     <td>${r["GC%"]}</td>
-    <td>${badge(r.OnTargetScore)}</td>
-    <td>${cscan(r.CRISPRScanScore)}</td>
-    <td>${badge(r.HybridScore)}</td>
-    <td>${badge(r.ConsensusScore)}</td>
-    <td><button class="iconbtn" data-explain="${r.gRNA}" title="Explain score">Explain</button></td>
+    <td>${score100(r.ConsensusScore)}</td>
+    <td><button class="iconbtn" data-explain="${r.gRNA}" title="Show the score breakdown">Details</button></td>
   </tr>`).join("");
   t.innerHTML = head + `<tbody>${body}</tbody>`;
 }
