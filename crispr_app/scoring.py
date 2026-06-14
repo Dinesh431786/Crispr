@@ -136,3 +136,52 @@ def on_target_score(guide: str, ngg_context: str | None = None) -> float:
 def doench_rule_set2_surrogate(guide: str, ngg_context: str | None = None) -> float:
     """Alias preserved for clarity in API responses / downstream callers."""
     return on_target_score(guide, ngg_context)
+
+
+def score_breakdown(guide: str, ngg_context: str | None = None) -> dict:
+    """Return the individual logit contributions behind an on-target score.
+
+    This makes the model *interpretable* (cf. CRISPRedict, Konstantakos et al.,
+    Nucleic Acids Res. 2022): callers can see exactly which sequence features
+    helped or hurt a guide rather than trusting a black box.
+    """
+    guide = guide.upper()
+    n = len(guide)
+    if n < 18:
+        return {"guide": guide, "score": 0.0, "contributions": {}, "note": "guide too short (<18 nt)"}
+
+    contrib: dict[str, float] = {"intercept": round(_INTERCEPT, 3)}
+
+    pos_total = 0.0
+    for offset in range(min(n, 20)):
+        pos = 19 - offset
+        col = _POS_WEIGHTS.get(guide[n - 1 - offset])
+        if col is not None:
+            pos_total += col[pos]
+    contrib["position_specific_nt"] = round(pos_total, 3)
+
+    dinuc_total = sum(_DINUC_WEIGHTS.get(guide[i:i + 2], 0.0) for i in range(n - 1))
+    contrib["dinucleotide"] = round(dinuc_total, 3)
+
+    gc = gc_fraction(guide)
+    contrib["gc_content"] = round(-2.2 * ((gc - GC_OPTIMUM) / GC_TOLERANCE) ** 2, 3)
+
+    tm_val = _tm(guide)
+    contrib["melting_temp"] = round(0.45 * math.exp(-((tm_val - TM_OPTIMUM) / TM_TOLERANCE) ** 2), 3)
+
+    homo = 0.0
+    for base in "ACGT":
+        if base * 4 in guide:
+            homo -= 0.25 if base == "T" else 0.15
+    contrib["homopolymer_penalty"] = round(homo, 3)
+
+    if ngg_context:
+        contrib["ngg_context"] = round(_NGGN_WEIGHTS.get(ngg_context[0].upper(), 0.0), 3)
+
+    return {
+        "guide": guide,
+        "gc_percent": round(gc * 100, 1),
+        "tm_celsius": round(tm_val, 1),
+        "contributions": contrib,
+        "score": on_target_score(guide, ngg_context),
+    }
