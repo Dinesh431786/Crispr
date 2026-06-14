@@ -5,3 +5,5 @@ biopython
 pandas
 numpy
 python-multipart
+# Optional: enables the ONNX on-target backend (drop a model into models/ontarget.onnx)
+# onnxruntime

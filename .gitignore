@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+
+# Trained model artifacts (produced locally by train.py; not version-controlled)
+crispr_app/models/*.json
+crispr_app/models/*.onnx
