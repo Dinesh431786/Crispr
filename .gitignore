@@ -4,3 +4,5 @@ __pycache__/
 # Trained model artifacts (produced locally by train.py; not version-controlled)
 crispr_app/models/*.json
 crispr_app/models/*.onnx
+# ...except the shipped, version-controlled default model
+!crispr_app/models/default.json

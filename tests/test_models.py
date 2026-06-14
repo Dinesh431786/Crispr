@@ -15,14 +15,24 @@ def test_feature_vector_shape():
 
 
 def test_active_backend_defaults_to_heuristic(monkeypatch, tmp_path):
-    # With no model files, auto resolution must fall back to the surrogate.
+    # With no model files at all, auto resolution must fall back to the surrogate.
     models.reset_caches()
     monkeypatch.setattr(models, "_LINEAR_PATH", str(tmp_path / "none.json"))
+    monkeypatch.setattr(models, "_DEFAULT_PATH", str(tmp_path / "none_default.json"))
     monkeypatch.setattr(models, "_ONNX_PATH", str(tmp_path / "none.onnx"))
     models.reset_caches()
     assert active_backend() == "heuristic"
     s = predict_on_target("GACGATCAGTCAGGATCACC")
     assert 0.0 <= s <= 1.0
+    models.reset_caches()
+
+
+def test_shipped_default_model_is_used():
+    # The version-controlled default model should make 'linear' the active backend.
+    models.reset_caches()
+    assert active_backend() == "linear"
+    assert 0.0 <= predict_on_target("GACGATCAGTCAGGATCACC") <= 1.0
+    models.reset_caches()
 
 
 def test_linear_model_save_load_roundtrip(tmp_path):
