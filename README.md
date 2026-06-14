@@ -1,132 +1,37 @@
+<div align="center">
+
 # 🧬 CRISPR Precision Studio
 
-A modern, research-grounded CRISPR guide-design platform with a FastAPI backend
-and a responsive single-page web UI. Version 3.0 rebuilds the scientific core
-around the determinants reported in current (2023–2026) literature, splitting
-the engine into focused, testable modules while keeping the original API-first
-architecture intact.
+**Research-grounded CRISPR guide design — interpretable, fast, and honest.**
 
-## Architecture
+On-target scoring · both-strand off-target specificity · prime-editing pegRNAs — one clean score per guide, every score explainable.
 
-The 3-layer separation is unchanged — only the science layer grew:
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-API--first-009688?logo=fastapi&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-34%20passing-2e8b57)
+![Dependencies](https://img.shields.io/badge/deps-lightweight%20(NumPy)-blue)
+![No API keys](https://img.shields.io/badge/API%20keys-none-9ee7d2)
+![License](https://img.shields.io/badge/license-MIT-black)
 
-```
-Browser (templates/index.html + static/app.js)
-        │  JSON over fetch()
-        ▼
-FastAPI (crispr_app/main.py)  ──►  Pydantic validation + utils.validate_sequence
-        │
-        ▼
-Science layer
-   ├── scoring.py    on-target efficiency  (Doench RS2 / Azimuth-informed)
-   ├── offtarget.py  CFD + MIT/Hsu + aggregate specificity
-   ├── prime.py      pegRNA design         (PRIDICT2.0-informed)
-   └── analysis.py   pipeline + vectorised both-strand off-target search
-        │  pandas DataFrame → JSON
-        ▼
-Browser renders ranked tables
-```
+</div>
 
-No database; everything is computed per request. No external LLM/API keys are
-required for any workflow.
+---
 
-## Peer-reviewed scoring, zero downloads
+## ✨ Highlights
 
-Every 20-nt NGG guide with flanking context is also scored by **CRISPRscan**
-(Moreno-Mateos et al., *Nat. Methods* 2015) — a published logistic-regression
-model whose 91 weights are reproduced *verbatim* in `crisprscan.py` and
-**validated against CRISPOR's reference vector** in the test suite (no training
-data required). It appears as the `CRISPRScanScore` column and is blended into
-the consensus ranking when its 35-mer window is available.
+| | Feature | What it means |
+|---|---|---|
+| 🎯 | **One Efficiency score** | A single 0–100 number ranks each guide — no column soup. |
+| 🔍 | **Explainable** | `POST /api/explain` shows the per-feature breakdown behind every score. |
+| 🧬 | **Both-strand off-targets** | Vectorised NumPy scan + per-site **CFD** & **MIT/Hsu** + aggregate specificity. |
+| 🌟 | **Prime Editing Studio** | PRIDICT2.0-informed pegRNA design (Spacer + RTT + PBS). |
+| 📚 | **Peer-reviewed scoring** | **CRISPRscan** weights reproduced verbatim & unit-validated — zero downloads. |
+| 🔌 | **Pluggable models** | `onnx → trained-linear → heuristic`, auto-selected and reported. |
+| ⚡ | **Lightweight** | No GPU, no LLM keys, no DB — everything computed per request. |
 
-## Train a real model & beat the interpretable baseline
+---
 
-The on-target score is served through a **pluggable registry** (`models.py`)
-that resolves `onnx → learned-linear → heuristic` and reports which backend it
-used (`GET /api/models`, and a `model` field on `/api/design`).
-
-```bash
-# Fit a reproducible linear model on real labelled data (Doench 2016, Kim 2019, …)
-cd crispr_app
-python train.py path/to/dataset.csv      # CSV columns: guide,measured[,ngg_context]
-# -> writes models/linear.json; the API auto-loads it and reports model="linear"
-```
-
-Benchmark any model on a public dataset (CRISPOR `*.context.tab` format):
-
-```bash
-python benchmark.py /path/to/doench2016_hg19.context.tab
-```
-
-Measured results on real downloaded data are in [BENCHMARKS.md](BENCHMARKS.md)
-(e.g. CRISPRscan validates at ρ=0.579 on its home dataset; the heuristic reaches
-ρ≈0.25 on human data) — reproducible, not asserted.
-
-`train.py` uses NumPy-only closed-form ridge regression (no heavy ML stack),
-over **position-specific dinucleotide features** that roughly **double** Spearman
-on datasets with signal (chari2015 0.20→0.40, morenoMateos 0.17→0.43; gradient
-boosting matched ridge to ±0.02, so we stay dependency-free). It holds out 20 %
-of guides and prints train/test Spearman so the gain is **measured, not
-asserted**. Note: ρ≈0.93 is *not* achievable — it exceeds the ~0.7 reproducibility
-ceiling of the wet-lab data itself (see [BENCHMARKS.md](BENCHMARKS.md)); the
-honest within-dataset SOTA is ~0.85–0.88, reachable via the ONNX backend.
-holds out 20 % of guides, and prints train/test Spearman so the gain is
-**measured, not asserted**. For deep-model accuracy, export a trained
-DeepSpCas9/CRISPRon to `models/ontarget.onnx`, install `onnxruntime`, and the
-registry uses it automatically. See [BENCHMARKS.md](BENCHMARKS.md).
-
-## Where this tool competes
-
-Honest positioning (see [BENCHMARKS.md](BENCHMARKS.md)): deep models
-(DeepHF/DeepSpCas9/CRISPRon, Spearman ρ≈0.73–0.87) lead on raw on-target
-correlation and we do not claim to beat them. We target the **interpretable**
-tier (Azimuth/CRISPRedict) and aim to lead on dimensions that matter day-to-day:
-
-- **Interpretability** — every on-target score ships with a per-feature
-  breakdown (`POST /api/explain`); most tools are black boxes.
-- **Off-target completeness** — both-strand scan, per-site CFD *and* MIT/Hsu,
-  plus a CRISPOR-style aggregate specificity score.
-- **Prime editing** — PRIDICT2.0-informed pegRNA design, free and key-less.
-- **Speed & UX** — sub-second vectorised scans; a professional UI with score
-  heatmap badges, PAM-highlighted sequences, FASTA upload, CSV export, copy, and
-  inline score explanations.
-
-## What's new in 3.0
-
-- **Modular scientific core.** `scoring.py`, `offtarget.py`, and `prime.py`
-  isolate each model so it can be reviewed and unit-tested independently;
-  `analysis.py` orchestrates them and preserves the public API.
-- **Calibrated on-target model.** A transparent logistic model combining
-  position-specific single/dinucleotide preferences, a quadratic GC optimum,
-  nearest-neighbour Tm, homopolymer/poly-U penalties, and the NGGN 3'-context —
-  the dominant features behind Doench *Rule Set 2*/Azimuth.
-- **Both-strand off-target scanning.** The vectorised NumPy scanner now sweeps
-  the forward **and** reverse-complement strands (the previous engine missed
-  reverse-strand off-targets), reporting per-site **CFD** *and* **MIT/Hsu**
-  scores plus a CRISPOR-style **aggregate specificity** score per guide.
-- **PRIDICT2.0-informed Prime Editing Studio.** pegRNA ranking now optimises PBS
-  melting temperature toward ~37 °C, prefers PBS ≈ 13 nt / RTT ≈ 12 nt, requires
-  ≥3 nt of 3' homology past the edit, and penalises RTTs that begin with C.
-- **Bug fixes.** `numpy` is now declared in `requirements.txt`; the dev container
-  launches `uvicorn` (the removed Streamlit references are gone).
-
-## Scientific basis
-
-| Component | Model / source |
-|-----------|----------------|
-| On-target efficiency | Doench et al. 2014/2016 *Rule Set 2*/Azimuth (Nat. Biotechnol. 34:184); Xu et al. 2015. Modern benchmarks: Rule Set 3, DeepHF, DeepSpCas9, CRISPRon. |
-| Off-target (per site) | **CFD** — Doench et al. 2016; **MIT/Hsu** — Hsu et al. 2013 (Nat. Biotechnol. 31:827). |
-| Off-target (per guide) | Aggregate specificity `10000 / (100 + Σ off-target scores)` (CRISPOR convention). |
-| Prime editing | **PRIDICT2.0** — Mathis et al. 2024 (Nat. Biotechnol., doi:10.1038/s41587-024-02268-2); Anzalone et al. 2019 (Nature 576:149). |
-
-The on-target and pegRNA scores are **deterministic, research-informed
-surrogates** designed for fast ranking — not re-trained deep models. They
-reproduce the published *direction and relative magnitude* of each determinant
-but should not be read as absolute efficiencies. The "10x" framing remains a
-development benchmark for speed and feature depth; **wet-lab validation remains
-essential for all CRISPR applications.**
-
-## Run locally
+## 🚀 Quickstart
 
 ```bash
 cd crispr_app
@@ -134,30 +39,113 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-Open: `http://127.0.0.1:8000`
+➡️  Open **http://127.0.0.1:8000**
 
-## API quick reference
+---
 
-- `GET /health`
-- `POST /api/design` — ranked gRNAs with `OnTargetScore`, `HybridScore`, `ConsensusScore`
-- `POST /api/offtargets` — per-site CFD/MIT hits + per-guide `specificity` summary
-- `POST /api/simulate` — protein/indel outcome of an edit
-- `POST /api/prime-design` — ranked pegRNAs (Spacer + RTT + PBS) with `Score`
-- `POST /api/explain` — interpretable per-feature breakdown of an on-target score
-- `POST /api/upload-fasta` — parse pasted FASTA / plain DNA into a clean sequence
-- `GET /api/models` — active and available on-target backends
+## 🎯 The score (production)
 
-## Tests
+Each guide gets **one Efficiency score, 0–100** (higher = better), color-coded:
+
+| 🟢 High | 🟡 Moderate | 🔴 Low |
+|:---:|:---:|:---:|
+| ≥ 60 | 40 – 59 | < 40 |
+
+Click **Details** on any guide to see *why* it scored that way (GC, Tm, position-specific features…). Component sub-scores stay in the API/CSV for power users — never on screen.
+
+---
+
+## 📊 Accuracy — measured, not asserted
+
+Held-out Spearman ρ on real public datasets (full table + method in **[BENCHMARKS.md](BENCHMARKS.md)**):
+
+| Configuration | ρ | Notes |
+|---|:---:|---|
+| Default heuristic (zero setup) | ~0.25 | interpretable, no training |
+| **Trained** (rich features + ridge) | **0.40 – 0.52** | one command on real data |
+| CRISPRscan (validated) | 0.58 | on its home dataset |
+| ONNX backend (deep model) | ~0.85 | bring a DeepSpCas9/CRISPRon export |
+
+> ⚠️ **Honesty note.** ρ ≈ 0.93 is **not achievable** — it exceeds the ~0.71–0.77 reproducibility ceiling of the wet-lab data itself. Our scores are deterministic, research-informed surrogates for *ranking*; **wet-lab validation remains essential.**
+
+### Train a stronger model (NumPy-only, no heavy ML stack)
+
+```bash
+cd crispr_app
+python train.py dataset.csv          # columns: guide,measured[,ngg_context]
+# → writes models/linear.json; the API auto-loads it and reports model="linear"
+
+python benchmark.py data.context.tab # measure Spearman on a CRISPOR-format set
+```
+
+Position-specific dinucleotide features roughly **double** Spearman on datasets with signal (chari2015 0.20→0.40, morenoMateos 0.17→0.43); gradient boosting matched ridge to ±0.02, so we stay dependency-free.
+
+---
+
+## 🏗️ Architecture
+
+```
+Browser (templates/index.html + static/app.js)
+        │  JSON over fetch()
+        ▼
+FastAPI (main.py)  ──►  Pydantic validation + utils.validate_sequence
+        │
+        ▼
+Science layer
+   ├── scoring.py     on-target efficiency   (Doench RS2 / Azimuth-informed)
+   ├── crisprscan.py  CRISPRscan             (Moreno-Mateos 2015, verbatim)
+   ├── offtarget.py   CFD + MIT/Hsu + aggregate specificity
+   ├── prime.py       pegRNA design          (PRIDICT2.0-informed)
+   ├── features.py / models.py / train.py    pluggable + trainable models
+   └── analysis.py    pipeline + vectorised both-strand off-target search
+        │  pandas DataFrame → JSON
+        ▼
+Browser renders one ranked table
+```
+
+---
+
+## 🔌 API reference
+
+| Method & route | Purpose |
+|---|---|
+| `GET /health` | liveness check |
+| `POST /api/design` | ranked gRNAs with the `ConsensusScore` (Efficiency) |
+| `POST /api/offtargets` | per-site CFD/MIT hits + per-guide specificity summary |
+| `POST /api/simulate` | protein / indel outcome of an edit |
+| `POST /api/prime-design` | ranked pegRNAs (Spacer + RTT + PBS) |
+| `POST /api/explain` | interpretable per-feature score breakdown |
+| `POST /api/upload-fasta` | parse pasted FASTA / plain DNA |
+| `GET /api/models` | active & available on-target backends |
+
+---
+
+## 🔬 Scientific basis
+
+| Component | Model / source |
+|---|---|
+| On-target | Doench 2014/2016 *Rule Set 2*/Azimuth (Nat. Biotechnol. 34:184); CRISPRscan (Moreno-Mateos, Nat. Methods 2015) |
+| Off-target (site) | **CFD** (Doench 2016) · **MIT/Hsu** (Hsu 2013, Nat. Biotechnol. 31:827) |
+| Off-target (guide) | aggregate specificity `10000 / (100 + Σ scores)` (CRISPOR convention) |
+| Prime editing | **PRIDICT2.0** (Mathis 2024, doi:10.1038/s41587-024-02268-2); Anzalone 2019 (Nature 576:149) |
+
+---
+
+## ✅ Tests
 
 ```bash
 pip install pytest
-python -m pytest tests/ -q
+python -m pytest tests/ -q     # 34 passing
 ```
 
-Covers on-target scoring behaviour, CFD/MIT scoring, aggregate specificity,
-both-strand off-target detection, pegRNA design, performance, and dependency
-hygiene.
+Covers on-target scoring, CFD/MIT scoring, aggregate specificity, both-strand
+off-target detection, pegRNA design, the model registry & trainer, CRISPRscan
+reference-vector validation, performance, and dependency hygiene.
 
-## License
+---
 
-MIT
+<div align="center">
+
+**MIT licensed** · No API keys required · Wet-lab validation always essential
+
+</div>
