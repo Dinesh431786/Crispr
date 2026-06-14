@@ -6,12 +6,14 @@
 
 On-target scoring · both-strand off-target specificity · prime-editing pegRNAs — one clean score per guide, every score explainable.
 
+[![CI](https://github.com/Dinesh431786/Crispr/actions/workflows/ci.yml/badge.svg)](https://github.com/Dinesh431786/Crispr/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API--first-009688?logo=fastapi&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-34%20passing-2e8b57)
 ![Dependencies](https://img.shields.io/badge/deps-lightweight%20(NumPy)-blue)
 ![No API keys](https://img.shields.io/badge/API%20keys-none-9ee7d2)
 ![License](https://img.shields.io/badge/license-MIT-black)
+
+<sub>CI runs the test suite and renders a live UI screenshot (downloadable as a build artifact) on every push.</sub>
 
 </div>
 
@@ -61,8 +63,9 @@ Held-out Spearman ρ on real public datasets (full table + method in **[BENCHMAR
 
 | Configuration | ρ | Notes |
 |---|:---:|---|
-| Default heuristic (zero setup) | ~0.25 | interpretable, no training |
-| **Trained** (rich features + ridge) | **0.40 – 0.52** | one command on real data |
+| **Ships trained** (pooled human SpCas9) | **0.22 – 0.41** | default model, zero setup (leave-one-dataset-out) |
+| Trained on your own data | 0.40 – 0.52 | one command — `train.py` |
+| Heuristic fallback | ~0.25 | interpretable, used if no model present |
 | CRISPRscan (validated) | 0.58 | on its home dataset |
 | ONNX backend (deep model) | ~0.85 | bring a DeepSpCas9/CRISPRon export |
 
@@ -135,7 +138,7 @@ Browser renders one ranked table
 
 ```bash
 pip install pytest
-python -m pytest tests/ -q     # 34 passing
+python -m pytest tests/ -q     # 35 passing
 ```
 
 Covers on-target scoring, CFD/MIT scoring, aggregate specificity, both-strand

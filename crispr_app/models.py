@@ -30,6 +30,9 @@ except ImportError:  # pragma: no cover
 
 _BASE_DIR = Path(__file__).resolve().parent
 _LINEAR_PATH = os.environ.get("CRISPR_LINEAR_MODEL", str(_BASE_DIR / "models" / "linear.json"))
+# Shipped, version-controlled default model (pooled human SpCas9). A user-trained
+# linear.json takes precedence over it.
+_DEFAULT_PATH = str(_BASE_DIR / "models" / "default.json")
 _ONNX_PATH = os.environ.get("CRISPR_ONNX_MODEL", str(_BASE_DIR / "models" / "ontarget.onnx"))
 
 _linear_cache: "LinearModel | None" = None
@@ -68,12 +71,14 @@ def _load_linear() -> "LinearModel | None":
     global _linear_cache
     if _linear_cache is not None:
         return _linear_cache
-    p = Path(_LINEAR_PATH)
-    if p.is_file():
-        try:
-            _linear_cache = LinearModel.from_json(json.loads(p.read_text()))
-        except Exception:
-            _linear_cache = None
+    for path in (_LINEAR_PATH, _DEFAULT_PATH):  # user-trained model wins over shipped default
+        p = Path(path)
+        if p.is_file():
+            try:
+                _linear_cache = LinearModel.from_json(json.loads(p.read_text()))
+                break
+            except Exception:
+                _linear_cache = None
     return _linear_cache
 
 
