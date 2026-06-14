@@ -4,69 +4,131 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CRISPR Precision Studio</title>
+    <meta name="description" content="Interpretable, research-grounded CRISPR guide design, off-target specificity, and prime editing." />
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
-    <header>
-      <h1>🧬 CRISPR Precision Studio</h1>
-      <p>Research-informed gRNA design, off-target discovery, and edit simulation in one workflow.</p>
-      <p class="pill">No Gemini/OpenAI integration: this build is deterministic and API-key free.</p>
-    </header>
+    <div class="topbar">
+      <div class="topbar-inner">
+        <span class="brand-mark">⌬</span>
+        <span class="brand-name">CRISPR <b>Precision Studio</b></span>
+        <nav>
+          <a href="#design">Design</a>
+          <a href="#offtarget">Specificity</a>
+          <a href="#prime">Prime Editing</a>
+          <a href="/health" target="_blank" rel="noopener">API</a>
+        </nav>
+      </div>
+    </div>
 
     <main>
-      <section class="card">
-        <h2>1) Sequence Input</h2>
-        <textarea id="dna" rows="8" placeholder="Paste DNA sequence (A/T/C/G)"></textarea>
+      <section class="hero">
+        <div class="eyebrow">Interpretable · Deterministic · API-first</div>
+        <h1>Design CRISPR guides you can explain, not just rank.</h1>
+        <p>
+          Research-grounded on-target scoring, both-strand off-target specificity
+          (CFD + MIT/Hsu), and PRIDICT2.0-informed prime editing — with a
+          per-feature breakdown behind every score.
+        </p>
+        <div class="provenance">
+          <span class="tag">Doench RS2 / Azimuth features</span>
+          <span class="tag">CFD + MIT/Hsu specificity</span>
+          <span class="tag">PRIDICT2.0-informed pegRNA</span>
+          <span class="tag">No API keys · reproducible</span>
+        </div>
+      </section>
+
+      <section class="card" id="design">
+        <div class="card-head">
+          <span class="step">1</span>
+          <h2>Sequence &amp; guide design</h2>
+          <span class="sub">SpCas9 / Cas12a</span>
+        </div>
+        <label for="dna">Target DNA (paste sequence or FASTA)</label>
+        <textarea id="dna" rows="6" placeholder="> optional FASTA header&#10;ATGAGTCTGCTCTTCGCGTTGGAGTGAAATCTGAG..."></textarea>
+        <div class="row">
+          <button class="ghost tiny" id="exampleBtn">Load example</button>
+          <button class="ghost tiny" id="fastaBtn">Parse FASTA</button>
+          <button class="ghost tiny" id="clearBtn">Clear</button>
+        </div>
         <div class="grid">
-          <label>PAM
+          <label>PAM / enzyme
             <select id="pam">
-              <option value="NGG">Cas9 NGG</option>
-              <option value="NAG">Cas9 NAG</option>
-              <option value="NG">Cas9 NG</option>
-              <option value="TTTV">Cas12a TTTV</option>
+              <option value="NGG">SpCas9 · NGG</option>
+              <option value="NAG">SpCas9 · NAG</option>
+              <option value="NG">SpCas9-NG · NG</option>
+              <option value="TTTV">Cas12a · TTTV</option>
             </select>
           </label>
           <label>Guide length <input type="number" id="guideLength" value="20" min="18" max="25" /></label>
-          <label>Min GC <input type="number" id="minGc" value="40" min="30" max="80" /></label>
-          <label>Max GC <input type="number" id="maxGc" value="70" min="40" max="90" /></label>
+          <label>Min GC % <input type="number" id="minGc" value="40" min="30" max="80" /></label>
+          <label>Max GC % <input type="number" id="maxGc" value="70" min="40" max="90" /></label>
         </div>
-        <button id="designBtn">Find High-Confidence gRNAs</button>
+        <div class="row">
+          <button id="designBtn">Design guides</button>
+          <button class="ghost" id="exportGuidesBtn" disabled>Export CSV</button>
+        </div>
+        <p class="status" id="guideSummary">No guides yet — paste a sequence and run design.</p>
+        <div class="legend">
+          <span><span class="dot good"></span> high efficiency (≥0.6)</span>
+          <span><span class="dot mid"></span> moderate (0.4–0.6)</span>
+          <span><span class="dot low"></span> low (&lt;0.4)</span>
+          <span>· click <b>Explain</b> on any guide for the per-feature breakdown</span>
+        </div>
+        <div class="table-wrap"><table id="guidesTable"><tbody><tr><td class="empty">Results appear here.</td></tr></tbody></table></div>
+        <div class="explain" id="explainPanel"></div>
       </section>
 
-      <section class="card">
-        <h2>2) Ranked gRNAs</h2>
-        <p id="guideSummary">No guides yet.</p>
-        <div class="table-wrap"><table id="guidesTable"></table></div>
-      </section>
-
-      <section class="card">
-        <h2>3) Off-target Search</h2>
-        <p class="hint">10x optimized scan using NumPy vectorization.</p>
-        <textarea id="background" rows="5" placeholder="Paste background DNA for off-target scan"></textarea>
-        <label>Max mismatches <input type="number" id="maxMm" value="2" min="0" max="4" /></label>
-        <button id="offBtn">Scan Off-targets</button>
-        <p id="offSummary">No scan yet.</p>
-        <div class="table-wrap"><table id="offTable"></table></div>
-      </section>
-
-      <section class="card highlight">
-        <h2>🌟 Prime Editing Studio (New)</h2>
-        <p>Design precision pegRNAs for single-base substitutions.</p>
+      <section class="card" id="offtarget">
+        <div class="card-head">
+          <span class="step">2</span>
+          <h2>Off-target specificity</h2>
+          <span class="sub">vectorized · both strands</span>
+        </div>
+        <label for="background">Background / genomic context to scan</label>
+        <textarea id="background" rows="5" placeholder="Paste background DNA (both strands are scanned automatically)"></textarea>
         <div class="grid">
-          <label>Target Index <input type="number" id="primePos" value="20" min="0" /></label>
-          <label>Desired Base
+          <label>Max mismatches <input type="number" id="maxMm" value="3" min="0" max="4" /></label>
+        </div>
+        <div class="row">
+          <button id="offBtn" disabled>Scan off-targets</button>
+          <button class="ghost" id="exportOffBtn" disabled>Export CSV</button>
+        </div>
+        <p class="status" id="offSummary">Design guides first, then scan a background sequence.</p>
+        <div class="spec-grid" id="specGrid"></div>
+        <div class="table-wrap"><table id="offTable"><tbody><tr><td class="empty">Per-site CFD &amp; MIT/Hsu hits appear here.</td></tr></tbody></table></div>
+      </section>
+
+      <section class="card" id="prime">
+        <div class="card-head">
+          <span class="step">3</span>
+          <h2>Prime Editing Studio</h2>
+          <span class="sub">pegRNA · Spacer + RTT + PBS</span>
+        </div>
+        <p class="status">Design pegRNAs for single-base substitutions, ranked by PRIDICT2.0-informed determinants (PBS T<sub>m</sub> ≈ 37 °C, RTT/PBS length, 3′ homology).</p>
+        <div class="grid">
+          <label>Target index (0-based) <input type="number" id="primePos" value="40" min="0" /></label>
+          <label>Desired base
             <select id="primeBase">
-              <option value="A">A</option>
-              <option value="T">T</option>
-              <option value="C">C</option>
-              <option value="G">G</option>
+              <option value="A">A</option><option value="T">T</option>
+              <option value="C">C</option><option value="G">G</option>
             </select>
           </label>
         </div>
-        <button id="primeBtn">Design pegRNAs</button>
-        <div class="table-wrap"><table id="primeTable"></table></div>
+        <div class="row">
+          <button id="primeBtn">Design pegRNAs</button>
+          <button class="ghost" id="exportPrimeBtn" disabled>Export CSV</button>
+        </div>
+        <p class="status" id="primeSummary"></p>
+        <div class="table-wrap"><table id="primeTable"><tbody><tr><td class="empty">Ranked pegRNAs appear here.</td></tr></tbody></table></div>
       </section>
     </main>
+
+    <footer>
+      Scores are deterministic, research-informed surrogates intended for ranking and transparency;
+      gold-standard deep models (DeepHF, DeepSpCas9, CRISPRon) and wet-lab validation remain essential.
+      Methods &amp; citations in the <a href="https://github.com/Dinesh431786/Crispr" target="_blank" rel="noopener">README</a>.
+    </footer>
 
     <script src="/static/app.js"></script>
   </body>

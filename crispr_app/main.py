@@ -18,7 +18,8 @@ from analysis import (
     simulate_protein_edit,
     summarize_specificity,
 )
-from utils import validate_sequence
+from scoring import score_breakdown
+from utils import load_fasta_text, validate_sequence
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -139,6 +140,30 @@ def prime_design(payload: PrimeDesignRequest):
         "count": int(len(pe_guides)),
         "pegRNAs": pe_guides.head(50).to_dict(orient="records"),
     }
+
+
+class ExplainRequest(BaseModel):
+    guide: str = Field(..., min_length=18)
+    ngg_context: str | None = None
+
+
+class FastaRequest(BaseModel):
+    contents: str
+
+
+@app.post("/api/explain")
+def explain(payload: ExplainRequest):
+    """Interpretable breakdown of an on-target score (per-feature contributions)."""
+    return score_breakdown(payload.guide, payload.ngg_context)
+
+
+@app.post("/api/upload-fasta")
+def upload_fasta(payload: FastaRequest):
+    """Parse pasted FASTA (or plain DNA) into a clean sequence."""
+    sequence, message = load_fasta_text(payload.contents)
+    if not sequence:
+        raise HTTPException(status_code=400, detail=message or "Could not parse FASTA.")
+    return {"sequence": sequence, "length": len(sequence), "message": message}
 
 
 @app.get("/health")

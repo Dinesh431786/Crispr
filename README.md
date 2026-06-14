@@ -30,6 +30,22 @@ Browser renders ranked tables
 No database; everything is computed per request. No external LLM/API keys are
 required for any workflow.
 
+## Where this tool competes
+
+Honest positioning (see [BENCHMARKS.md](BENCHMARKS.md)): deep models
+(DeepHF/DeepSpCas9/CRISPRon, Spearman ρ≈0.73–0.87) lead on raw on-target
+correlation and we do not claim to beat them. We target the **interpretable**
+tier (Azimuth/CRISPRedict) and aim to lead on dimensions that matter day-to-day:
+
+- **Interpretability** — every on-target score ships with a per-feature
+  breakdown (`POST /api/explain`); most tools are black boxes.
+- **Off-target completeness** — both-strand scan, per-site CFD *and* MIT/Hsu,
+  plus a CRISPOR-style aggregate specificity score.
+- **Prime editing** — PRIDICT2.0-informed pegRNA design, free and key-less.
+- **Speed & UX** — sub-second vectorised scans; a professional UI with score
+  heatmap badges, PAM-highlighted sequences, FASTA upload, CSV export, copy, and
+  inline score explanations.
+
 ## What's new in 3.0
 
 - **Modular scientific core.** `scoring.py`, `offtarget.py`, and `prime.py`
@@ -82,6 +98,8 @@ Open: `http://127.0.0.1:8000`
 - `POST /api/offtargets` — per-site CFD/MIT hits + per-guide `specificity` summary
 - `POST /api/simulate` — protein/indel outcome of an edit
 - `POST /api/prime-design` — ranked pegRNAs (Spacer + RTT + PBS) with `Score`
+- `POST /api/explain` — interpretable per-feature breakdown of an on-target score
+- `POST /api/upload-fasta` — parse pasted FASTA / plain DNA into a clean sequence
 
 ## Tests
 
