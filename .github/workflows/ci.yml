@@ -28,6 +28,8 @@ jobs:
   screenshot:
     runs-on: ubuntu-latest
     needs: test
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +47,7 @@ jobs:
 
       - name: Launch app and capture UI screenshot
         run: |
+          mkdir -p docs
           (cd crispr_app && uvicorn main:app --port 8000 &)
           python - <<'PY'
           import time, sys
@@ -74,3 +77,16 @@ jobs:
         with:
           name: ui-screenshot
           path: docs/ui.png
+
+      - name: Commit screenshot to main
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/ui.png
+          if git diff --cached --quiet; then
+            echo "Screenshot unchanged; nothing to commit."
+          else
+            git commit -m "docs: update UI screenshot [skip ci]"
+            git push
+          fi
