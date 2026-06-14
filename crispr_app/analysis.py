@@ -31,6 +31,7 @@ try:  # Works both as top-level modules (uvicorn main:app) and as a package (tes
     from scoring import gc_fraction as _gc_fraction
     from scoring import on_target_score
     from models import predict_on_target
+    from crisprscan import score_from_context as crisprscan_context
 except ImportError:  # pragma: no cover - import-context fallback
     from .offtarget import (
         CFD_SCORES,
@@ -43,6 +44,7 @@ except ImportError:  # pragma: no cover - import-context fallback
     from .scoring import gc_fraction as _gc_fraction
     from .scoring import on_target_score
     from .models import predict_on_target
+    from .crisprscan import score_from_context as crisprscan_context
 
 __all__ = [
     "ScoringConfig",
@@ -137,12 +139,22 @@ def find_gRNAs(
     is_5prime_pam = pam == "TTTV"  # Cas12a: PAM is 5' of the protospacer
     guides: list[dict] = []
 
-    def _append_guide(strand: str, start: int, guide: str, pam_seq: str, ngg_ctx: str | None) -> None:
+    use_crisprscan = pam == "NGG" and guide_length == 20 and not is_5prime_pam
+
+    def _append_guide(strand: str, start: int, guide: str, pam_seq: str,
+                      ngg_ctx: str | None, local_seq: str, local_i: int) -> None:
         gc = _gc_fraction(guide) * 100
         if min_gc <= gc <= max_gc and "TTTT" not in guide:
             g_out = guide if not add_5prime_g or guide.startswith("G") else f"G{guide[:-1]}"
             on = predict_on_target(g_out, ngg_ctx)
             hy = hybrid_score(g_out)
+            cs = crisprscan_context(local_seq, local_i, guide_length) if use_crisprscan else None
+            # Consensus: blend the surrogate/learned score with the peer-reviewed
+            # CRISPRscan model when its 35-mer context is available.
+            if cs is not None:
+                consensus = round(0.25 * hy + 0.35 * on + 0.40 * cs, 3)
+            else:
+                consensus = round(0.35 * hy + 0.65 * on, 3)
             guides.append({
                 "Strand": strand,
                 "Start": start,
@@ -152,7 +164,8 @@ def find_gRNAs(
                 "HybridScore": hy,
                 "MLScore": on,
                 "OnTargetScore": on,
-                "ConsensusScore": round(0.35 * hy + 0.65 * on, 3),
+                "CRISPRScanScore": cs if cs is not None else "",
+                "ConsensusScore": consensus,
             })
 
     def _scan(seq: str, strand: str) -> None:
@@ -163,7 +176,7 @@ def find_gRNAs(
                 guide = seq[i + pam_len:i + pam_len + guide_length]
                 if check_pam(pam_seq, pam):
                     start = i if strand == "+" else n - i - guide_length - pam_len
-                    _append_guide(strand, start, guide, pam_seq, None)
+                    _append_guide(strand, start, guide, pam_seq, None, seq, i + pam_len)
         else:
             for i in range(n - guide_length - pam_len + 1):
                 guide = seq[i:i + guide_length]
@@ -171,12 +184,12 @@ def find_gRNAs(
                 if check_pam(pam_seq, pam):
                     ctx = seq[i + guide_length + pam_len:i + guide_length + pam_len + 1] or None
                     start = i if strand == "+" else n - i - guide_length - pam_len
-                    _append_guide(strand, start, guide, pam_seq, ctx)
+                    _append_guide(strand, start, guide, pam_seq, ctx, seq, i)
 
     _scan(sequence, "+")
     _scan(str(Seq(sequence).reverse_complement()), "-")
 
-    cols = ["Strand", "Start", "gRNA", "PAM", "GC%", "HybridScore", "MLScore", "OnTargetScore", "ConsensusScore"]
+    cols = ["Strand", "Start", "gRNA", "PAM", "GC%", "HybridScore", "MLScore", "OnTargetScore", "CRISPRScanScore", "ConsensusScore"]
     if not guides:
         return pd.DataFrame(columns=cols)
     return pd.DataFrame(guides).sort_values("ConsensusScore", ascending=False).reset_index(drop=True)

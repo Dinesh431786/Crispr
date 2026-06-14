@@ -93,7 +93,9 @@ def _load_onnx():
 
 
 def available_backends() -> list[str]:
-    backends = ["heuristic"]
+    # CRISPRscan (peer-reviewed, published weights) is always available for
+    # 20-nt NGG guides with flanking context; applied in the design pipeline.
+    backends = ["heuristic", "crisprscan"]
     if _load_linear() is not None:
         backends.append("linear")
     if _load_onnx() is not None:

@@ -30,6 +30,15 @@ Browser renders ranked tables
 No database; everything is computed per request. No external LLM/API keys are
 required for any workflow.
 
+## Peer-reviewed scoring, zero downloads
+
+Every 20-nt NGG guide with flanking context is also scored by **CRISPRscan**
+(Moreno-Mateos et al., *Nat. Methods* 2015) — a published logistic-regression
+model whose 91 weights are reproduced *verbatim* in `crisprscan.py` and
+**validated against CRISPOR's reference vector** in the test suite (no training
+data required). It appears as the `CRISPRScanScore` column and is blended into
+the consensus ranking when its 35-mer window is available.
+
 ## Train a real model & beat the interpretable baseline
 
 The on-target score is served through a **pluggable registry** (`models.py`)
