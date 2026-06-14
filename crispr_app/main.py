@@ -16,12 +16,13 @@ from analysis import (
     find_off_targets_detailed,
     indel_simulations,
     simulate_protein_edit,
+    summarize_specificity,
 )
 from utils import validate_sequence
 
 BASE_DIR = Path(__file__).resolve().parent
 
-app = FastAPI(title="CRISPR Precision Studio", version="2.0.0")
+app = FastAPI(title="CRISPR Precision Studio", version="3.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -95,12 +96,15 @@ def find_offtargets(payload: OffTargetRequest):
 
     df = pd.DataFrame({"gRNA": payload.guides})
     results = find_off_targets_detailed(df, payload.background_sequence, payload.max_mismatches, pam=payload.pam)
+    specificity = summarize_specificity(results, list(payload.guides))
+
     if results.empty:
-        return {"count": 0, "off_targets": []}
+        return {"count": 0, "off_targets": [], "specificity": specificity.to_dict(orient="records")}
 
     return {
         "count": int(len(results)),
         "off_targets": results.sort_values("CFD_Score", ascending=False).head(500).to_dict(orient="records"),
+        "specificity": specificity.to_dict(orient="records"),
     }
 
 
