@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from crispr_app.benchmark import evaluate, pearson, spearman
+from crispr_app.benchmark import evaluate, load_crispor_context, pearson, spearman
 from crispr_app.scoring import score_breakdown
 
 
@@ -33,6 +33,22 @@ def test_evaluate_returns_metrics():
     out = evaluate(records)
     assert out["n"] == 4
     assert -1.0 <= out["spearman"] <= 1.0
+
+
+def test_load_crispor_context(tmp_path):
+    p = tmp_path / "mini.context.tab"
+    p.write_text(
+        "guide\tseq\tdb\tpos\tmodFreq\tlongSeq\n"
+        "g1\tGGCTGCTTTACCCGCTGTGG\thg19\tchr1:1-2:+\t2.9\t"
+        + "AAAAAA" + "GGCTGCTTTACCCGCTGTGG" + "TGGAAAAAA" + "\n"
+        "g2\tTCCGGGTTGGCCTTCCACTG\thg19\tchr1:3-4:+\t1.1\t"
+        + "TTTTTT" + "TCCGGGTTGGCCTTCCACTG" + "CGGTTTTTT" + "\n"
+    )
+    recs = load_crispor_context(str(p))
+    assert len(recs) == 2
+    assert recs[0]["guide"] == "GGCTGCTTTACCCGCTGTGG"
+    assert recs[0]["measured"] == 2.9
+    assert len(recs[0]["mer35"]) == 35  # 6 + 20 + 3 + 6
 
 
 def test_score_breakdown_sums_are_present():

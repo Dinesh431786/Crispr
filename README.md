@@ -52,6 +52,16 @@ python train.py path/to/dataset.csv      # CSV columns: guide,measured[,ngg_cont
 # -> writes models/linear.json; the API auto-loads it and reports model="linear"
 ```
 
+Benchmark any model on a public dataset (CRISPOR `*.context.tab` format):
+
+```bash
+python benchmark.py /path/to/doench2016_hg19.context.tab
+```
+
+Measured results on real downloaded data are in [BENCHMARKS.md](BENCHMARKS.md)
+(e.g. CRISPRscan validates at ρ=0.579 on its home dataset; the heuristic reaches
+ρ≈0.25 on human data) — reproducible, not asserted.
+
 `train.py` uses NumPy-only closed-form ridge regression (no heavy ML stack),
 holds out 20 % of guides, and prints train/test Spearman so the gain is
 **measured, not asserted**. For deep-model accuracy, export a trained
