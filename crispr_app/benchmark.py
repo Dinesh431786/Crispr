@@ -75,3 +75,59 @@ def evaluate(records: list[dict], predictor=on_target_score) -> dict:
         "spearman": round(spearman(preds, measured), 4),
         "pearson": round(pearson(preds, measured), 4),
     }
+
+
+def load_crispor_context(path: str) -> list[dict]:
+    """Load a CRISPOR-format ``*.context.tab`` efficiency dataset.
+
+    Columns: guide, seq (20mer or 23mer), db, pos, modFreq, longSeq. Returns
+    records with ``guide`` (20mer), ``measured`` (modFreq) and, when derivable
+    from ``longSeq``, a 35-mer ``mer35`` for CRISPRscan. Download such datasets
+    from the CRISPOR paper repo (github.com/maximilianh/crisporPaper, effData/).
+    """
+    import csv
+
+    records: list[dict] = []
+    with open(path) as fh:
+        for row in csv.DictReader(fh, delimiter="\t"):
+            g = (row.get("seq") or "").strip().upper()[:20]
+            if len(g) != 20 or any(c not in "ACGT" for c in g):
+                continue
+            try:
+                measured = float(row["modFreq"])
+            except (KeyError, ValueError):
+                continue
+            ls = (row.get("longSeq") or "").strip().upper()
+            idx = ls.find(g)
+            mer35 = None
+            if idx >= 6 and idx + 29 <= len(ls):
+                w = ls[idx - 6:idx + 29]
+                if len(w) == 35 and all(c in "ACGT" for c in w):
+                    mer35 = w
+            records.append({"guide": g, "measured": measured, "mer35": mer35})
+    return records
+
+
+def _cli() -> None:
+    import argparse
+
+    ap = argparse.ArgumentParser(description="Benchmark on-target models on a CRISPOR dataset")
+    ap.add_argument("context_tab", help="path to a CRISPOR *.context.tab file")
+    args = ap.parse_args()
+
+    recs = load_crispor_context(args.context_tab)
+    y = [r["measured"] for r in recs]
+    h = [on_target_score(r["guide"]) for r in recs]
+    print(f"N = {len(recs)}")
+    print(f"  heuristic surrogate   Spearman = {spearman(h, y):.3f}")
+    try:
+        from crisprscan import score_35mer
+    except ImportError:  # pragma: no cover
+        from .crisprscan import score_35mer
+    cs = [(score_35mer(r["mer35"]), r["measured"]) for r in recs if r["mer35"]]
+    if len(cs) > 2:
+        print(f"  CRISPRscan            Spearman = {spearman([a for a, _ in cs], [b for _, b in cs]):.3f}  (N={len(cs)})")
+
+
+if __name__ == "__main__":
+    _cli()

@@ -3,6 +3,48 @@
 This document is deliberately honest. It states where CRISPR Precision Studio is
 competitive, where it is not, and exactly how to reproduce the numbers.
 
+## Measured results (downloaded data, reproducible)
+
+These numbers were produced **in this repo** on real, public datasets from the
+CRISPOR paper repository (github.com/maximilianh/crisporPaper, `effData/`),
+not asserted. Reproduce any row with:
+
+```bash
+cd crispr_app
+python benchmark.py /path/to/<dataset>.context.tab
+```
+
+Spearman ρ between predicted and measured efficiency:
+
+| Dataset | N | Heuristic surrogate | CRISPRscan |
+|---------|---|--------------------:|-----------:|
+| morenoMateos2015 (CRISPRscan's home data) | 1020 | 0.170 | **0.579** |
+| doench2014-Hs | 881 | 0.274 | 0.010 |
+| doench2016_hg19 | 3804 | 0.255 | 0.108 |
+| chari2015Train | 1234 | 0.198 | 0.123 |
+| housden2015 | 75 | 0.033 | 0.204 |
+| xu2015TrainHl60 | 2076 | −0.236 | −0.201 |
+| xu2015TrainKbm7 | 2076 | −0.264 | −0.205 |
+
+**Honest reading of these numbers:**
+
+1. **CRISPRscan validates at ρ=0.579 on its own training data** — confirming our
+   verbatim transcription is correct (the published model scores ~0.5–0.6 there).
+   It collapses on human U6 datasets because it was trained on zebrafish T7 sgRNAs;
+   cross-context transfer is poor, a well-known result (Haeussler et al. 2016).
+2. The heuristic surrogate sits at ρ≈0.25–0.27 on correctly-oriented human data —
+   modest but real, in the range CRISPOR reports for simple scores cross-dataset.
+3. **xu2015 shows negative ρ for both predictors**: its `modFreq` is an inverted
+   depletion-screen readout (lower value = more efficient guide). A reminder that
+   target orientation must be checked before trusting any correlation.
+4. Deep models reach ρ≈0.73–0.87 largely by training *within* a single
+   large-scale context; no simple/transferable score matches that out of the box.
+
+A 5-fold cross-validated linear model (our `features` + ridge) trained on
+doench2016_hg19 reached ρ≈0.24 — i.e. training a thin linear model on this
+particular noisy target does not beat the heuristic. The honest path to
+deep-model accuracy is the ONNX backend (below), not a hand-built linear model.
+
 ## How on-target predictors are judged
 
 The field measures **Spearman's rank correlation (ρ)** between predicted and
