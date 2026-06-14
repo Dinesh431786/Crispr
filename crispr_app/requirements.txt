@@ -3,4 +3,5 @@ uvicorn[standard]
 jinja2
 biopython
 pandas
+numpy
 python-multipart

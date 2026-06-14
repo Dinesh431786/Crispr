@@ -60,7 +60,11 @@ document.getElementById("offBtn").onclick = async () => {
     return;
   }
 
-  document.getElementById("offSummary").innerText = `Found ${data.count} candidate off-target loci.`;
+  const spec = (data.specificity || [])
+    .map((s) => `${s.gRNA.slice(0, 8)}… CFD-spec ${s.CFD_Specificity} / MIT-spec ${s.MIT_Specificity} (${s.OffTargetCount} hits)`)
+    .join(" | ");
+  document.getElementById("offSummary").innerText =
+    `Found ${data.count} candidate off-target loci (both strands). ${spec}`;
   toTable("offTable", data.off_targets.slice(0, 30));
 };
 
