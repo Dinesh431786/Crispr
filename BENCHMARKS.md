@@ -55,6 +55,24 @@ map each guide to `{"guide", "measured"}`, and run `evaluate`. We intentionally
 do **not** vendor a dataset to avoid shipping unverified numbers; plug in the
 authoritative source and the harness reports the honest correlation.
 
+## Real, validated scoring without any dataset download
+
+Some published predictors print their full parameters, so they can be
+reproduced exactly with **no training data**. We ship one:
+
+**CRISPRscan / Moreno-Mateos** ([Nat. Methods 2015](https://www.nature.com/articles/nmeth.3543)).
+Its 91 logistic-regression weights, intercept (0.18393…) and 35-mer framing are
+transcribed verbatim into `crisprscan.py` from the open-source CRISPOR
+implementation, and the test suite asserts our output equals CRISPOR's embedded
+reference vector (`TCCTCTGGTGGCGCTGCTGGATGGACGGGACTGTA → 77`). That is a
+peer-reviewed model, byte-for-byte reproducible and unit-validated, with zero
+downloads. (CRISPRscan's reported on-target ρ is ~0.4 on mammalian sets — modest,
+but *honest and validated*, and it complements the surrogate in the consensus.)
+
+The same idea extends to other fully-published models (Doench 2014 Rule Set 1,
+Housden) whose coefficients are in `crisporEffScores.py`; CRISPRater/CRISPRscan
+remain the cleanest reproducible linear models.
+
 ## Closing the deep-model gap — now shipped
 
 The path from "interpretable surrogate" to "deep-model accuracy" is implemented,
