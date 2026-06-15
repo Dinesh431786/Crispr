@@ -53,6 +53,49 @@ uvicorn main:app --reload
 
 ---
 
+## 🔄 Workflow
+
+```
+   DNA sequence (paste or FASTA)
+            │
+            ▼
+   Guide discovery  ── both strands, multi-PAM (NGG/NAG/NG/TTTV)
+            │
+            ▼
+   On-target scoring ── built-in model + CRISPRscan
+            │
+            ▼
+   Off-target analysis ── CFD + MIT/Hsu + aggregate specificity
+            │
+            ▼
+   Ranking ── one 0–100 Score per guide
+            │
+            ▼
+   Explanation ── per-feature breakdown (/api/explain)
+```
+
+---
+
+## ⚡ Example
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/design \
+  -H 'Content-Type: application/json' \
+  -d '{"dna_sequence": "ATGGCCGAGTACAAGCCCACGGTGCGCCTCGCC...", "pam": "NGG"}'
+```
+
+Real output (288 bp input → 21 guides found; `model: linear`, the shipped default):
+
+| # | Guide (5′→3′) | PAM | Strand | GC% | Score |
+|---|---|:---:|:---:|:---:|:---:|
+| 1 | `GATGTGGCGGTCCGGATCGA` | CGG | − | 65 | **74** |
+| 2 | `AAGGTGTGGGTCGCGGACGA` | CGG | + | 65 | **74** |
+| 3 | `ATCGACGGTGTGGCGCGTGG` | CGG | − | 70 | **69** |
+
+`POST /api/explain` then returns the per-feature breakdown (GC, T<sub>m</sub>, position-specific contributions) behind any guide's Score.
+
+---
+
 ## 🎯 The score (production)
 
 Each guide gets **one Score, 0–100** (higher = better) — a *relative prioritization* score combining the on-target predictors, **not** a literal % editing rate. Color-coded:
