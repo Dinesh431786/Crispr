@@ -2,9 +2,9 @@
 
 # 🧬 CRISPR Precision Studio
 
-**Research-grounded CRISPR guide design — interpretable, fast, and honest.**
+**Design, rank, explain, and validate CRISPR guides — in one lightweight platform.**
 
-On-target scoring · both-strand off-target specificity · prime-editing pegRNAs — one clean score per guide, every score explainable.
+Transparent guide *prioritization*: interpretable on-target scoring, both-strand off-target analysis, and prime-editing support — without GPUs, cloud dependencies, or black-box predictions.
 
 [![CI](https://github.com/Dinesh431786/Crispr/actions/workflows/ci.yml/badge.svg)](https://github.com/Dinesh431786/Crispr/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
@@ -23,7 +23,7 @@ On-target scoring · both-strand off-target specificity · prime-editing pegRNAs
 
 ![CRISPR Precision Studio UI](docs/ui.png)
 
-<sub>Rendered automatically by CI on every push — one **Efficiency** score per guide, with a per-feature **Details** breakdown.</sub>
+<sub>Rendered automatically by CI on every push — one **Score** per guide, with a per-feature **Details** breakdown.</sub>
 
 ---
 
@@ -67,17 +67,26 @@ Click **Details** on any guide to see *why* it scored that way (GC, Tm, position
 
 ## 📊 Accuracy — measured, not asserted
 
-Held-out Spearman ρ on real public datasets (full table + method in **[BENCHMARKS.md](BENCHMARKS.md)**):
+Held-out Spearman ρ on real public datasets (full table + method in **[BENCHMARKS.md](BENCHMARKS.md)**). The platform offers two tiers — a transparent **built-in** ranker (default) and an optional **external deep-learning** backend for maximum raw accuracy:
 
-| Configuration | ρ | Notes |
+**🪶 Built-in — lightweight, interpretable, zero setup**
+
+| Model | ρ | Notes |
 |---|:---:|---|
-| **Ships trained** (pooled human SpCas9) | **0.22 – 0.41** | default model, zero setup (leave-one-dataset-out) |
+| Shipped trained (default) | 0.22 – 0.41 | pooled human SpCas9, leave-one-dataset-out |
 | Trained on your own data | 0.40 – 0.52 | one command — `train.py` |
-| Heuristic fallback | ~0.25 | interpretable, used if no model present |
-| CRISPRscan (validated) | 0.58 | on its home dataset |
-| ONNX backend (deep model) | ~0.85 | bring a DeepSpCas9/CRISPRon export |
+| Heuristic (always available) | ~0.25 | fully interpretable fallback |
+| CRISPRscan (peer-reviewed, validated) | 0.58 | on its home dataset |
 
-> ⚠️ **Honesty note.** No predictor can exceed the ~0.71–0.77 reproducibility ceiling of the wet-lab data itself; published state-of-the-art tops out around ~0.85–0.88. Our scores are deterministic, research-informed surrogates for *ranking*; **wet-lab validation remains essential.**
+**🧠 Optional — external deep-learning backend**
+
+| Model | ρ | Notes |
+|---|:---:|---|
+| ONNX (DeepSpCas9 / CRISPRon) | ~0.85 | bring your own export; auto-detected |
+
+The built-in tier optimises for **transparency and speed** — its job is to *rank* candidates well enough to prioritise, with every score explainable. For maximum raw correlation, drop in a deep model via ONNX.
+
+> ⚠️ **Honesty note.** No predictor can exceed the ~0.71–0.77 reproducibility ceiling of the wet-lab data itself; published state-of-the-art tops out around ~0.85–0.88. Our scores are deterministic surrogates for *ranking*; **wet-lab validation remains essential.**
 
 ### Train a stronger model (NumPy-only, no heavy ML stack)
 
@@ -90,6 +99,26 @@ python benchmark.py data.context.tab # measure Spearman on a CRISPOR-format set
 ```
 
 Position-specific dinucleotide features roughly **double** Spearman on datasets with signal (chari2015 0.20→0.40, morenoMateos 0.17→0.43); gradient boosting matched ridge to ±0.02, so we stay dependency-free.
+
+---
+
+## 🆚 How it compares
+
+Honest positioning — including where we're **weaker**. CRISPOR/CHOPCHOP are mature, genome-aware tools; our edge is *transparent prioritization* in a lightweight, API-first package.
+
+| Capability | CRISPR Precision Studio | CRISPOR | CHOPCHOP | Benchling |
+|---|:---:|:---:|:---:|:---:|
+| Single explainable prioritization score | ✓ | partial¹ | partial¹ | ✗ |
+| Per-feature score breakdown (API) | ✓ | ✗ | ✗ | ✗ |
+| Both-strand off-target (CFD + MIT) | ✓ | ✓ (reference) | ✓ | ✓ |
+| **Genome-wide** off-target search | ✗ (background seq only) | ✓ | ✓ | ✓ |
+| Prime-editing pegRNA design | ✓ | ✗² | partial | ✗ |
+| JSON API-first | ✓ | partial | ✗ | ✓ |
+| Runs locally, no GPU / no keys | ✓ | ✓³ | ✓³ | ✗ (SaaS) |
+
+<sub>¹ Report several separate scores rather than one explained number. ² CRISPOR targets Cas9/Cas12a guide design; pegRNA design is usually a separate tool (PrimeDesign / pegFinder). ³ Open-source but heavier to self-host. Marks reflect typical usage and may change as those tools evolve.</sub>
+
+**Honest gap:** genome-wide off-target scanning is the main capability CRISPOR/CHOPCHOP have that we don't — it's on the roadmap.
 
 ---
 
@@ -121,13 +150,26 @@ Browser renders one ranked table
 | Method & route | Purpose |
 |---|---|
 | `GET /health` | liveness check |
-| `POST /api/design` | ranked gRNAs with the `ConsensusScore` (Efficiency) |
+| `POST /api/design` | ranked gRNAs with the `ConsensusScore` (the 0–100 Score) |
 | `POST /api/offtargets` | per-site CFD/MIT hits + per-guide specificity summary |
 | `POST /api/simulate` | protein / indel outcome of an edit |
 | `POST /api/prime-design` | ranked pegRNAs (Spacer + RTT + PBS) |
 | `POST /api/explain` | interpretable per-feature score breakdown |
 | `POST /api/upload-fasta` | parse pasted FASTA / plain DNA |
 | `GET /api/models` | active & available on-target backends |
+
+---
+
+## 🌟 Prime editing — how pegRNAs are chosen
+
+For a target base substitution, `prime.py` enumerates and ranks candidate pegRNAs using determinants from PRIDICT2.0 (Mathis 2024) and Anzalone 2019:
+
+1. **Spacer / nick.** Scan NGG PAMs within ~30 nt of the target; place the Cas9 nick 3 bp 5′ of each PAM. Require the edit to fall 0–15 nt downstream of the nick.
+2. **PBS (primer-binding site).** Enumerate lengths 8–17 nt; the PBS is the reverse complement of the sequence immediately 5′ of the nick. Its nearest-neighbour **T<sub>m</sub> is optimised toward ~37 °C** (Gaussian reward), with mild length penalties favouring ~13 nt.
+3. **RTT (reverse-transcriptase template).** Enumerate lengths 10–20 nt; the RTT encodes the edit and must retain **≥3 nt of 3′ homology past the edit** for flap resolution. Penalties: RTT that **begins with C** (destabilises the edited flap) and RTT GC far from ~55%. Length term favours ~12 nt.
+4. **Ranking.** A calibrated logistic score blends the PBS T<sub>m</sub>, PBS/RTT length terms, 3′-homology constraint, RTT-starts-with-C penalty, and GC term into one 0–1 `Score`.
+
+> The pegRNA score is PRIDICT2.0-*informed*, not the trained PRIDICT2.0 network. It reproduces the published determinants for ranking; it has not yet been numerically benchmarked against a PRIDICT test set (on the roadmap). No secondary-structure (e.g. RNAfold) penalty is applied yet.
 
 ---
 
