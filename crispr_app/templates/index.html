@@ -16,6 +16,7 @@
           <a href="#design">Design</a>
           <a href="#offtarget">Specificity</a>
           <a href="#simulate">Edit outcome</a>
+          <a href="#baseedit">Base editing</a>
           <a href="#prime">Prime Editing</a>
           <a href="https://github.com/Dinesh431786/Crispr#-api-reference" target="_blank" rel="noopener">API docs</a>
         </nav>
@@ -53,6 +54,7 @@
           <button class="ghost tiny" id="exampleBtn">Load example</button>
           <button class="ghost tiny" id="fastaBtn">Parse FASTA</button>
           <button class="ghost tiny" id="clearBtn">Clear</button>
+          <label class="filelabel">Upload FASTA <input type="file" id="fastaFile" accept=".fa,.fasta,.txt,.seq" /></label>
         </div>
         <div class="grid">
           <label>PAM / enzyme
@@ -77,8 +79,9 @@
           <span><span class="dot good"></span> high (≥60)</span>
           <span><span class="dot mid"></span> moderate (40–59)</span>
           <span><span class="dot low"></span> low (&lt;40)</span>
-          <span>· click <b>Details</b> for the breakdown</span>
+          <span>· click <b>Details</b> for the breakdown · click a column header to sort</span>
         </div>
+        <div id="guideMap" class="map"></div>
         <div class="table-wrap"><table id="guidesTable"><tbody><tr><td class="empty">Results appear here.</td></tr></tbody></table></div>
         <div class="explain" id="explainPanel"></div>
       </section>
@@ -96,10 +99,11 @@
           <label>Max mismatches <input type="number" id="maxMm" value="3" min="0" max="4" /></label>
         </div>
         <div class="row">
-          <button id="offBtn" disabled>Scan off-targets</button>
+          <button id="offBtn" disabled>Scan pasted background</button>
+          <label class="filelabel">Scan genome FASTA <input type="file" id="genomeFile" accept=".fa,.fasta,.txt" /></label>
           <button class="ghost" id="exportOffBtn" disabled>Export CSV</button>
         </div>
-        <p class="status" id="offSummary">Design guides first, then scan a background sequence.</p>
+        <p class="status" id="offSummary">Design guides first, then scan a pasted background or upload a genome FASTA.</p>
         <div class="spec-grid" id="specGrid"></div>
         <div class="table-wrap"><table id="offTable"><tbody><tr><td class="empty">Per-site CFD &amp; MIT/Hsu hits appear here.</td></tr></tbody></table></div>
       </section>
@@ -129,9 +133,21 @@
         <div class="table-wrap"><table id="indelTable"></table></div>
       </section>
 
-      <section class="card" id="prime">
+      <section class="card" id="baseedit">
         <div class="card-head">
           <span class="step">4</span>
+          <h2>Base editing (ABE / CBE)</h2>
+          <span class="sub">activity window 4–8</span>
+        </div>
+        <p class="status">Find guides whose designed protospacer has a base editable by an adenine (A→G) or cytosine (C→T) base editor within the activity window (positions 4–8).</p>
+        <div class="row"><button id="baseBtn" disabled>Find base-editable guides</button></div>
+        <p class="status" id="baseSummary">Design guides first.</p>
+        <div class="table-wrap"><table id="baseTable"></table></div>
+      </section>
+
+      <section class="card" id="prime">
+        <div class="card-head">
+          <span class="step">5</span>
           <h2>Prime Editing Studio</h2>
           <span class="sub">pegRNA · Spacer + RTT + PBS</span>
         </div>

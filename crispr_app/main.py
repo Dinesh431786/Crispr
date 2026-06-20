@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -18,18 +19,26 @@ from analysis import (
     simulate_protein_edit,
     summarize_specificity,
 )
+from base_edit import summarize as base_edit_summarize
 from models import active_backend, available_backends, predict_interval
 from scoring import score_breakdown
 from utils import load_fasta_text, validate_sequence
 
 BASE_DIR = Path(__file__).resolve().parent
+MAX_SEQ = 200_000  # input guard: max DNA characters accepted by JSON endpoints
 
-app = FastAPI(title="CRISPR Precision Studio", version="3.0.0")
+app = FastAPI(title="CRISPR Precision Studio", version="3.1.0")
+
+# CORS: configurable for deployment. Default "*" (open) but WITHOUT credentials,
+# which is the only spec-valid combination; set CRISPR_CORS_ORIGINS to a
+# comma-separated allowlist to lock it down in production.
+_origins_env = os.environ.get("CRISPR_CORS_ORIGINS", "*").strip()
+_origins = ["*"] if _origins_env == "*" else [o.strip() for o in _origins_env.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_origins=_origins,
+    allow_credentials=_origins != ["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -38,7 +47,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
 class DesignRequest(BaseModel):
-    dna_sequence: str = Field(..., min_length=23)
+    dna_sequence: str = Field(..., min_length=23, max_length=MAX_SEQ)
     pam: str = "NGG"
     guide_length: int = Field(20, ge=18, le=25)
     min_gc: int = Field(40, ge=30, le=80)
@@ -47,21 +56,21 @@ class DesignRequest(BaseModel):
 
 
 class OffTargetRequest(BaseModel):
-    guides: list[str]
-    background_sequence: str
+    guides: list[str] = Field(..., max_length=2000)
+    background_sequence: str = Field(..., max_length=MAX_SEQ)
     max_mismatches: int = Field(2, ge=0, le=4)
     pam: str = "NGG"
 
 
 class SimulateRequest(BaseModel):
-    dna_sequence: str
-    guide: str
+    dna_sequence: str = Field(..., max_length=MAX_SEQ)
+    guide: str = Field(..., min_length=10, max_length=40)
     edit_offset: int = 20
     edit_type: str = "del1"
 
 
 class PrimeDesignRequest(BaseModel):
-    dna_sequence: str
+    dna_sequence: str = Field(..., max_length=MAX_SEQ)
     target_pos: int
     desired_edit: str = Field(..., max_length=1)
 
@@ -86,10 +95,18 @@ def design_guides(payload: DesignRequest):
         add_5prime_g=payload.add_5prime_g,
     )
 
+    top = guides.head(100).to_dict(orient="records")
+    # Attach the calibrated on-target confidence interval (0-100) to each guide.
+    for g in top:
+        ci = predict_interval(g["gRNA"])
+        if ci is not None:
+            g["CI_low"] = round(ci["low"] * 100)
+            g["CI_high"] = round(ci["high"] * 100)
+            g["CI_level"] = int(ci["coverage"] * 100)
     return {
         "count": int(len(guides)),
         "model": active_backend(),
-        "top_guides": guides.head(100).to_dict(orient="records"),
+        "top_guides": top,
     }
 
 
@@ -150,12 +167,12 @@ class ExplainRequest(BaseModel):
 
 
 class FastaRequest(BaseModel):
-    contents: str
+    contents: str = Field(..., max_length=MAX_SEQ)
 
 
 class GenomeOffTargetRequest(BaseModel):
-    guides: list[str]
-    fasta: str
+    guides: list[str] = Field(..., max_length=500)
+    fasta: str = Field(..., max_length=20_000_000)  # ~20 MB (e.g. a bacterial genome)
     max_mismatches: int = Field(3, ge=0, le=4)
     pam: str = "NGG"
 
@@ -195,6 +212,17 @@ def offtargets_genome(payload: GenomeOffTargetRequest):
         "off_targets": top.to_dict(orient="records"),
         "specificity": spec.to_dict(orient="records"),
     }
+
+
+class BaseEditRequest(BaseModel):
+    guides: list[str]
+
+
+@app.post("/api/base-edit")
+def base_edit(payload: BaseEditRequest):
+    """ABE/CBE editable positions within the base-editing activity window."""
+    guides = [g.strip().upper() for g in payload.guides if g.strip()][:500]
+    return {"results": [base_edit_summarize(g) for g in guides]}
 
 
 @app.get("/api/models")
