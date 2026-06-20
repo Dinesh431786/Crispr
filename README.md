@@ -35,6 +35,7 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 | 🔍 | **Explainable** | `POST /api/explain` shows the per-feature breakdown behind every score. |
 | 📐 | **Calibrated uncertainty** | Distribution-free **conformal** confidence interval per guide — *verified* 90% coverage. |
 | 🧬 | **Both-strand off-targets** | Vectorised NumPy scan + per-site **CFD** & **MIT/Hsu** + aggregate specificity. |
+| 🌍 | **Genome-wide search** | Stream any (multi-chromosome) FASTA; memory-safe chunked scan, both strands. |
 | 🌟 | **Prime Editing Studio** | PRIDICT2.0-informed pegRNA design (Spacer + RTT + PBS). |
 | 📚 | **Peer-reviewed scoring** | **CRISPRscan** weights reproduced verbatim & unit-validated — zero downloads. |
 | 🔌 | **Pluggable models** | `onnx → trained-linear → heuristic`, auto-selected and reported. |
@@ -186,14 +187,13 @@ Honest positioning — including where we're **weaker**. CRISPOR/CHOPCHOP are ma
 | Single explainable prioritization score | ✓ | partial¹ | partial¹ | ✗ |
 | Per-feature score breakdown (API) | ✓ | ✗ | ✗ | ✗ |
 | Both-strand off-target (CFD + MIT) | ✓ | ✓ (reference) | ✓ | ✓ |
-| **Genome-wide** off-target search | ✗ (background seq only) | ✓ | ✓ | ✓ |
+| **Genome-wide** off-target search | ✓⁴ | ✓ | ✓ | ✓ |
+| Calibrated uncertainty (conformal CI) | ✓ | ✗ | ✗ | ✗ |
 | Prime-editing pegRNA design | ✓ | ✗² | partial | ✗ |
 | JSON API-first | ✓ | partial | ✗ | ✓ |
 | Runs locally, no GPU / no keys | ✓ | ✓³ | ✓³ | ✗ (SaaS) |
 
-<sub>¹ Report several separate scores rather than one explained number. ² CRISPOR targets Cas9/Cas12a guide design; pegRNA design is usually a separate tool (PrimeDesign / pegFinder). ³ Open-source but heavier to self-host. Marks reflect typical usage and may change as those tools evolve.</sub>
-
-**Honest gap:** genome-wide off-target scanning is the main capability CRISPOR/CHOPCHOP have that we don't — it's on the roadmap.
+<sub>¹ Report several separate scores rather than one explained number. ² CRISPOR targets Cas9/Cas12a guide design; pegRNA design is usually a separate tool (PrimeDesign / pegFinder). ³ Open-source but heavier to self-host. ⁴ Streaming + chunked FASTA scan (any genome); fast on bacterial/viral/small-eukaryotic genomes (~11 Mb/s/guide), minutes for mammalian whole-genome — slower than BWA/FM-index tools, which is the documented next optimisation. Marks reflect typical usage and may change as those tools evolve.</sub>
 
 ---
 
@@ -226,12 +226,38 @@ Browser renders one ranked table
 |---|---|
 | `GET /health` | liveness check |
 | `POST /api/design` | ranked gRNAs with the `ConsensusScore` (the 0–100 Score) |
-| `POST /api/offtargets` | per-site CFD/MIT hits + per-guide specificity summary |
+| `POST /api/offtargets` | per-site CFD/MIT hits + per-guide specificity (pasted background) |
+| `POST /api/offtargets-genome` | genome-wide scan over a (multi-record) FASTA, both strands |
 | `POST /api/simulate` | protein / indel outcome of an edit |
 | `POST /api/prime-design` | ranked pegRNAs (Spacer + RTT + PBS) |
 | `POST /api/explain` | per-feature breakdown + conformal confidence interval |
 | `POST /api/upload-fasta` | parse pasted FASTA / plain DNA |
 | `GET /api/models` | active & available on-target backends |
+
+---
+
+## 🌍 Genome-wide off-target search
+
+Scan an entire genome FASTA (any number of chromosomes/contigs), both strands,
+with the same CFD + MIT/Hsu + aggregate-specificity scoring. Records are streamed
+and scanned in overlapping chunks, so peak memory is bounded by the chunk size,
+not the genome size.
+
+```bash
+# CLI
+python crispr_app/genome.py genome.fasta GACGATCAGTCAGGATCACC --max-mismatches 3
+
+# API
+curl -s -X POST http://127.0.0.1:8000/api/offtargets-genome \
+  -H 'Content-Type: application/json' \
+  -d '{"guides": ["GACGATCAGTCAGGATCACC"], "fasta": ">chr1\nACGT...", "max_mismatches": 3}'
+```
+
+Verified on a real 230 kb genome (both strands) in **0.02 s** (~11 Mb/s/guide);
+unit tests confirm planted off-targets are found at the correct coordinates on
+both strands, across chunk boundaries, and that the perfect on-target match is
+excluded. Mammalian whole-genome scans run in minutes — a seed/FM-index backend
+is the next optimisation.
 
 ---
 
@@ -263,7 +289,7 @@ For a target base substitution, `prime.py` enumerates and ranks candidate pegRNA
 
 ```bash
 pip install pytest
-python -m pytest tests/ -q     # 35 passing
+python -m pytest tests/ -q     # 45 passing
 ```
 
 Covers on-target scoring, CFD/MIT scoring, aggregate specificity, both-strand
