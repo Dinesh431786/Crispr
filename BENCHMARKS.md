@@ -20,6 +20,21 @@ Reproduce: `python scripts/build_default_model.py --effdata crisporPaper/effData
 on synthetic exchangeable data. The quantiles are stored in
 `models/default.json` and served via `POST /api/explain`.
 
+## Genome-wide off-target: performance & a negative result
+
+The genome scanner uses a chunked, NumPy-vectorised sliding-window mismatch
+count (both strands). Measured throughput: **~13 Mb/s/guide** (e.g. a 230 kb
+genome in 0.02 s; ~minutes for a mammalian genome).
+
+We evaluated a **pigeonhole seed-and-verify** prefilter (split the guide into
+m+1 disjoint seeds, find exact seed matches via vectorised k-mer codes, verify
+only candidates) hoping for a large speedup. **Measured result: it was *not*
+faster** for 20-nt guides — 0.60× at 1 mismatch, ~tied at 3 — because the
+int64 k-mer encoding (O(n·L)) costs as much as the brute comparison it replaces.
+We therefore **did not ship it**. The genuine speedup for mammalian-scale scans
+is a compiled suffix/FM-index (BWA / minimap2 style), which is intentionally out
+of scope for a dependency-light, pure-NumPy tool and is the documented next step.
+
 ## How high can on-target ρ realistically go?
 
 There is a hard ceiling set by the data, not the algorithm. Across CRISPR
