@@ -78,15 +78,19 @@ jobs:
           name: ui-screenshot
           path: docs/ui.png
 
-      - name: Commit screenshot to main
+      - name: Commit screenshot + refresh README image to main
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/ui.png
+          # Cache-bust the README image with the screenshot's content hash so
+          # GitHub always shows the latest UI (it caches images by URL).
+          HASH=$(md5sum docs/ui.png | cut -c1-8)
+          sed -i -E "s#(\!\[CRISPR Precision Studio UI\]\(docs/ui\.png)(\?v=[0-9a-f]+)?\)#\1?v=${HASH})#" README.md
+          git add docs/ui.png README.md
           if git diff --cached --quiet; then
-            echo "Screenshot unchanged; nothing to commit."
+            echo "UI unchanged; nothing to commit."
           else
-            git commit -m "docs: update UI screenshot [skip ci]"
+            git commit -m "docs: update UI screenshot + README image [skip ci]"
             git push
           fi
