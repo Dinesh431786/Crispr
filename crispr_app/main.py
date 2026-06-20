@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 
@@ -46,6 +47,20 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
+def _asset_version() -> str:
+    """Short hash of the static assets, for cache-busting the browser on update."""
+    h = hashlib.md5()
+    for f in ("static/app.js", "static/style.css"):
+        try:
+            h.update((BASE_DIR / f).read_bytes())
+        except FileNotFoundError:
+            pass
+    return h.hexdigest()[:8]
+
+
+ASSET_V = _asset_version()
+
+
 class DesignRequest(BaseModel):
     dna_sequence: str = Field(..., min_length=23, max_length=MAX_SEQ)
     pam: str = "NGG"
@@ -77,7 +92,7 @@ class PrimeDesignRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 def ui(request: Request):
-    return templates.TemplateResponse(request, "index.html")
+    return templates.TemplateResponse(request, "index.html", {"asset_v": ASSET_V})
 
 
 @app.post("/api/design")
