@@ -86,12 +86,28 @@ function download(filename, text) {
 
 /* ---------- rendering ---------- */
 
+let sortState = { col: "ConsensusScore", dir: -1 };
+
+function sortAndRenderGuides() {
+  const { col, dir } = sortState;
+  const sorted = [...lastGuides].sort((a, b) => {
+    const x = a[col], y = b[col];
+    if (typeof x === "string") return dir * String(x).localeCompare(String(y));
+    return dir * ((x > y) - (x < y));
+  });
+  renderGuides(sorted);
+  renderGuideMap(lastGuides);
+}
+
 function renderGuides(rows) {
   const t = $("guidesTable");
   if (!rows.length) { t.innerHTML = `<tbody><tr><td class="empty">No guides matched the GC / quality filters.</td></tr></tbody>`; return; }
+  const arrow = (c) => (sortState.col === c ? `<span class="arrow">${sortState.dir < 0 ? "▼" : "▲"}</span>` : "");
+  const sth = (label, key) => `<th class="sortable" data-sort="${key}">${label} ${arrow(key)}</th>`;
+  const hasCI = rows.some((r) => r.CI_low != null);
   const head = `<thead><tr>
-    <th>#</th><th>Strand</th><th>Start</th><th>Guide (5'→3') + PAM</th>
-    <th>GC%</th><th title="0–100 prioritization score combining on-target predictors. Relative ranking, not a literal % editing rate.">Score</th><th></th></tr></thead>`;
+    <th>#</th>${sth("Strand", "Strand")}${sth("Start", "Start")}<th>Guide (5'→3') + PAM</th>
+    ${sth("GC%", "GC%")}${sth("Score", "ConsensusScore")}${hasCI ? "<th title=\"Calibrated on-target confidence interval\">90% CI</th>" : ""}<th></th></tr></thead>`;
   const score100 = (v) => {
     const n = Math.round(Number(v) * 100);
     const cls = n >= 60 ? "good" : n >= 40 ? "mid" : "low";
@@ -104,9 +120,30 @@ function renderGuides(rows) {
     <td>${seqWithPam(r.gRNA, r.PAM)} ${copyBtn(r.gRNA)}</td>
     <td>${r["GC%"]}</td>
     <td>${score100(r.ConsensusScore)}</td>
+    ${hasCI ? `<td class="status" style="white-space:nowrap">${r.CI_low != null ? `${r.CI_low}–${r.CI_high}` : "—"}</td>` : ""}
     <td><button class="iconbtn" data-explain="${r.gRNA}" title="Show the score breakdown">Details</button></td>
   </tr>`).join("");
   t.innerHTML = head + `<tbody>${body}</tbody>`;
+}
+
+function renderGuideMap(guides) {
+  const el = $("guideMap");
+  const seqLen = ($("dna").value.match(/[ACGTacgt]/g) || []).length;
+  if (!guides.length || !seqLen) { el.innerHTML = ""; return; }
+  const W = 1000, H = 70, mid = 35;
+  const x = (s) => Math.max(2, Math.min(W - 2, (s / seqLen) * W));
+  const color = (v) => (v >= 0.6 ? "var(--good)" : v >= 0.4 ? "var(--mid)" : "var(--low)");
+  const ticks = guides.map((g) => {
+    const cx = x(g.Start).toFixed(1), top = g.Strand === "+";
+    const y1 = top ? mid - 3 : mid + 3, y2 = top ? 12 : H - 12;
+    return `<line x1="${cx}" x2="${cx}" y1="${y1}" y2="${y2}" stroke="${color(g.ConsensusScore)}" stroke-width="2"><title>${g.gRNA} • ${g.Strand} strand • start ${g.Start} • score ${Math.round(g.ConsensusScore * 100)}</title></line>`;
+  }).join("");
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="guide position map">
+    <line class="axis" x1="0" x2="${W}" y1="${mid}" y2="${mid}"></line>
+    <text class="tick" x="2" y="${H - 2}">0</text>
+    <text class="tick" x="${W - 2}" y="${H - 2}" text-anchor="end">${seqLen} bp</text>
+    ${ticks}
+  </svg><div class="map-legend">Guide positions along the target — above the line = + strand, below = − strand; colour = score.</div>`;
 }
 
 function renderSpecificity(spec) {
@@ -209,6 +246,21 @@ $("fastaBtn").onclick = async () => {
   } catch (e) { setStatus($("guideSummary"), e.message, true); }
 };
 
+$("fastaFile").onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const text = await f.text();
+  try {
+    const data = await postJSON("/api/upload-fasta", { contents: text });
+    $("dna").value = data.sequence;
+    setStatus($("guideSummary"), `Loaded ${data.length} bp from ${f.name}.`);
+  } catch (err) {
+    $("dna").value = text.slice(0, 200000);
+    setStatus($("guideSummary"), `Loaded ${f.name} as raw text — ${err.message}`, true);
+  }
+  e.target.value = "";
+};
+
 $("designBtn").onclick = async () => {
   const btn = $("designBtn");
   busy(btn, true, "Designing…");
@@ -221,10 +273,12 @@ $("designBtn").onclick = async () => {
       max_gc: Number($("maxGc").value),
     });
     lastGuides = data.top_guides;
-    renderGuides(lastGuides);
-    setStatus($("guideSummary"), `Designed ${data.count} candidate guides — showing top ${Math.min(lastGuides.length, 100)}, ranked by consensus score.`);
+    sortState = { col: "ConsensusScore", dir: -1 };
+    sortAndRenderGuides();
+    setStatus($("guideSummary"), `Designed ${data.count} candidate guides — showing top ${Math.min(lastGuides.length, 100)}, ranked by score.`);
     $("exportGuidesBtn").disabled = !lastGuides.length;
     $("offBtn").disabled = !lastGuides.length;
+    $("baseBtn").disabled = !lastGuides.length;
     $("explainPanel").classList.remove("open");
 
     // Populate the edit-outcome guide picker with forward-strand guides
@@ -257,6 +311,46 @@ $("offBtn").onclick = async () => {
     setStatus($("offSummary"), `${data.count} candidate off-target loci across both strands. Specificity (0–100, higher is better) summarised per guide below.`);
     $("exportOffBtn").disabled = !lastOff.length;
   } catch (e) { setStatus($("offSummary"), e.message, true); }
+  finally { busy(btn, false); }
+};
+
+$("genomeFile").onchange = async (e) => {
+  const f = e.target.files[0];
+  if (!f) { return; }
+  if (!lastGuides.length) { setStatus($("offSummary"), "Design guides first.", true); e.target.value = ""; return; }
+  const text = await f.text();
+  setStatus($("offSummary"), `Scanning ${f.name} (${(text.length / 1e6).toFixed(1)} MB) genome-wide…`);
+  try {
+    const data = await postJSON("/api/offtargets-genome", {
+      guides: lastGuides.map((g) => g.gRNA),
+      fasta: text,
+      max_mismatches: Number($("maxMm").value),
+      pam: $("pam").value,
+    });
+    lastOff = data.off_targets || [];
+    lastSpec = data.specificity || [];
+    renderSpecificity(lastSpec);
+    renderOff(lastOff);
+    setStatus($("offSummary"), `${data.count} genome-wide off-target site(s) from ${f.name}.`);
+    $("exportOffBtn").disabled = !lastOff.length;
+  } catch (err) { setStatus($("offSummary"), err.message, true); }
+  e.target.value = "";
+};
+
+$("baseBtn").onclick = async () => {
+  if (!lastGuides.length) { setStatus($("baseSummary"), "Design guides first.", true); return; }
+  const btn = $("baseBtn");
+  busy(btn, true, "Scanning…");
+  try {
+    const data = await postJSON("/api/base-edit", { guides: lastGuides.map((g) => g.gRNA) });
+    const rows = data.results.filter((r) => r.editable).map((r) => ({
+      Guide: r.gRNA,
+      "CBE (C→T) positions": r.CBE_positions.join(", ") || "—",
+      "ABE (A→G) positions": r.ABE_positions.join(", ") || "—",
+    }));
+    toTable("baseTable", rows);
+    setStatus($("baseSummary"), `${rows.length} of ${data.results.length} guides have a base editable in the 4–8 window (CBE C→T or ABE A→G).`);
+  } catch (e) { setStatus($("baseSummary"), e.message, true); }
   finally { busy(btn, false); }
 };
 
@@ -318,5 +412,12 @@ document.addEventListener("click", async (e) => {
   if (ex) {
     try { renderExplain(await postJSON("/api/explain", { guide: ex.dataset.explain })); }
     catch (err) { setStatus($("guideSummary"), err.message, true); }
+    return;
+  }
+  const th = e.target.closest("th.sortable[data-sort]");
+  if (th && lastGuides.length) {
+    const col = th.dataset.sort;
+    sortState = { col, dir: sortState.col === col ? -sortState.dir : -1 };
+    sortAndRenderGuides();
   }
 });
