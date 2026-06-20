@@ -67,6 +67,15 @@ function toCSV(rows) {
   return [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n");
 }
 
+function toTable(elementId, rows) {
+  const t = $(elementId);
+  if (!rows || !rows.length) { t.innerHTML = ""; return; }
+  const cols = Object.keys(rows[0]);
+  t.innerHTML =
+    `<thead><tr>${cols.map((c) => `<th>${c}</th>`).join("")}</tr></thead>` +
+    `<tbody>${rows.map((r) => `<tr>${cols.map((c) => `<td>${r[c]}</td>`).join("")}</tr>`).join("")}</tbody>`;
+}
+
 function download(filename, text) {
   const blob = new Blob([text], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
@@ -217,6 +226,15 @@ $("designBtn").onclick = async () => {
     $("exportGuidesBtn").disabled = !lastGuides.length;
     $("offBtn").disabled = !lastGuides.length;
     $("explainPanel").classList.remove("open");
+
+    // Populate the edit-outcome guide picker with forward-strand guides
+    // (those are present in the pasted sequence, so the cut site is locatable).
+    const fwd = lastGuides.filter((g) => g.Strand === "+");
+    const sel = $("simGuide");
+    sel.innerHTML = fwd.length
+      ? fwd.map((g) => `<option value="${g.gRNA}">${g.gRNA} (start ${g.Start}, score ${Math.round(g.ConsensusScore * 100)})</option>`).join("")
+      : `<option value="">— no + strand guides —</option>`;
+    $("simBtn").disabled = !fwd.length;
   } catch (e) { setStatus($("guideSummary"), e.message, true); }
   finally { busy(btn, false); }
 };
@@ -256,6 +274,31 @@ $("primeBtn").onclick = async () => {
     setStatus($("primeSummary"), `${data.count} pegRNA candidates — showing top ${Math.min(lastPeg.length, 30)} by PRIDICT2.0-informed score.`);
     $("exportPrimeBtn").disabled = !lastPeg.length;
   } catch (e) { setStatus($("primeSummary"), e.message, true); }
+  finally { busy(btn, false); }
+};
+
+$("simBtn").onclick = async () => {
+  const guide = $("simGuide").value;
+  if (!guide) { setStatus($("simSummary"), "Design guides first, then pick one.", true); return; }
+  const btn = $("simBtn");
+  busy(btn, true, "Simulating…");
+  try {
+    const data = await postJSON("/api/simulate", {
+      dna_sequence: $("dna").value,
+      guide,
+      edit_offset: 17,           // SpCas9 cut ≈ 3 bp 5' of the PAM
+      edit_type: $("editType").value,
+    });
+    const flag = (on, label) =>
+      `<span class="badge ${on ? "low" : "good"}">${label}: ${on ? "yes" : "no"}</span>`;
+    $("simPanel").innerHTML = `
+      <h4>Predicted protein consequence &nbsp; ${flag(data.frameshift, "frameshift")} ${flag(data.stop_lost, "stop lost")}</h4>
+      <p class="status">Protein before (to first stop):</p><div class="seq">${data.protein_before || "—"}</div>
+      <p class="status" style="margin-top:.6rem">Protein after the edit:</p><div class="seq">${data.protein_after || "—"}</div>`;
+    $("simPanel").classList.add("open");
+    setStatus($("simSummary"), `Simulated ${$("editType").options[$("editType").selectedIndex].text.toLowerCase()} at the cut site.`);
+    toTable("indelTable", data.indel_panel);
+  } catch (e) { setStatus($("simSummary"), e.message, true); $("simPanel").classList.remove("open"); }
   finally { busy(btn, false); }
 };
 
