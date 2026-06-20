@@ -179,11 +179,12 @@ function renderExplain(data) {
 /* ---------- actions ---------- */
 
 (async () => {
+  const friendly = { linear: "trained model", heuristic: "built-in (interpretable)", onnx: "deep model", crisprscan: "CRISPRscan" };
   try {
     const m = await (await fetch("/api/models")).json();
-    $("modelTag").textContent = `on-target model: ${m.active}`;
-    $("modelTag").title = `available: ${m.available.join(", ")}`;
-  } catch (_) { $("modelTag").textContent = "on-target model: heuristic"; }
+    $("modelTag").textContent = `on-target model: ${friendly[m.active] || m.active}`;
+    $("modelTag").title = `available: ${m.available.map((x) => friendly[x] || x).join(", ")}`;
+  } catch (_) { $("modelTag").textContent = "on-target model: built-in"; }
 })();
 
 $("exampleBtn").onclick = () => { $("dna").value = EXAMPLE_SEQ; $("background").value = EXAMPLE_SEQ; };
