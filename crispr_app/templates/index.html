@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CRISPR Precision Studio</title>
-    <meta name="description" content="Interpretable, research-grounded CRISPR guide design, off-target specificity, and prime editing." />
+    <meta name="description" content="Transparent CRISPR guide prioritization: one explainable score per guide with a confidence interval, off-target specificity, and prime editing. No GPUs or API keys." />
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
@@ -16,19 +16,20 @@
           <a href="#design">Design</a>
           <a href="#offtarget">Specificity</a>
           <a href="#prime">Prime Editing</a>
-          <a href="/health" target="_blank" rel="noopener">API</a>
+          <a href="https://github.com/Dinesh431786/Crispr#-api-reference" target="_blank" rel="noopener">API docs</a>
         </nav>
       </div>
     </div>
 
     <main>
       <section class="hero">
-        <div class="eyebrow">Interpretable · Deterministic · API-first</div>
-        <h1>Design CRISPR guides you can explain, not just rank.</h1>
+        <div class="eyebrow">Interpretable · Deterministic · No black boxes</div>
+        <h1>Design, rank, and explain CRISPR guides.</h1>
         <p>
-          Research-grounded on-target scoring, both-strand off-target specificity
-          (CFD + MIT/Hsu), and PRIDICT2.0-informed prime editing — with a
-          per-feature breakdown behind every score.
+          Transparent guide prioritization — one score per guide with a
+          per-feature breakdown and a calibrated confidence interval, plus
+          both-strand off-target specificity and prime-editing design.
+          No GPUs, no cloud, no API keys.
         </p>
         <div class="provenance">
           <span class="tag">Doench RS2 / Azimuth features</span>
@@ -89,6 +90,7 @@
         </div>
         <label for="background">Background / genomic context to scan</label>
         <textarea id="background" rows="5" placeholder="Paste background DNA (both strands are scanned automatically)"></textarea>
+        <p class="status" style="margin-top:0">Scanning a whole genome? Use the API/CLI endpoint <code>/api/offtargets-genome</code> for multi-chromosome FASTA files.</p>
         <div class="grid">
           <label>Max mismatches <input type="number" id="maxMm" value="3" min="0" max="4" /></label>
         </div>
@@ -127,8 +129,8 @@
     </main>
 
     <footer>
-      Scores are deterministic, research-informed surrogates intended for ranking and transparency;
-      gold-standard deep models (DeepHF, DeepSpCas9, CRISPRon) and wet-lab validation remain essential.
+      Scores are deterministic, interpretable surrogates for prioritization — every score is explainable and
+      carries a calibrated confidence interval. Wet-lab validation remains essential for all CRISPR experiments.
       Methods &amp; citations in the <a href="https://github.com/Dinesh431786/Crispr" target="_blank" rel="noopener">README</a>.
     </footer>
 

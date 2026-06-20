@@ -80,21 +80,23 @@ uvicorn main:app --reload
 
 ## ⚡ Example
 
+A complete, copy-pasteable request (real 288 bp input):
+
 ```bash
 curl -s -X POST http://127.0.0.1:8000/api/design \
   -H 'Content-Type: application/json' \
-  -d '{"dna_sequence": "ATGGCCGAGTACAAGCCCACGGTGCGCCTCGCC...", "pam": "NGG"}'
+  -d '{"pam": "NGG", "dna_sequence": "ATGGCCGAGTACAAGCCCACGGTGCGCCTCGCCACCCGCGACGACGTCCCCAGGGCCGTACGCACCCTCGCCGCCGCGTTCGCCGACTACCCCGCCACGCGCCACACCGTCGATCCGGACCGCCACATCGAGCGGGTCACCGAGCTGCAAGAACTCTTCCTCACGCGCGTCGGGCTCGACATCGGCAAGGTGTGGGTCGCGGACGACGGCGCCGCGGTGGCGGTCTGGACCACGCCGGAGAGCGTCGAAGCGGGGGCGGTGTTCGCCGAGATCGGCCCGCGCATGGCC"}'
 ```
 
-Real output (288 bp input → 21 guides found; `model: linear`, the shipped default):
+Real output → 21 guides found. Top 3 (the API returns `ConsensusScore` in 0–1; shown here ×100 as the UI does):
 
-| # | Guide (5′→3′) | PAM | Strand | GC% | Score |
-|---|---|:---:|:---:|:---:|:---:|
-| 1 | `GATGTGGCGGTCCGGATCGA` | CGG | − | 65 | **74** |
-| 2 | `AAGGTGTGGGTCGCGGACGA` | CGG | + | 65 | **74** |
-| 3 | `ATCGACGGTGTGGCGCGTGG` | CGG | − | 70 | **69** |
+| # | Guide (5′→3′) | PAM | Strand | GC% | Score | `ConsensusScore` |
+|---|---|:---:|:---:|:---:|:---:|:---:|
+| 1 | `GATGTGGCGGTCCGGATCGA` | CGG | − | 65 | **74** | 0.74 |
+| 2 | `AAGGTGTGGGTCGCGGACGA` | CGG | + | 65 | **74** | 0.74 |
+| 3 | `ATCGACGGTGTGGCGCGTGG` | CGG | − | 70 | **69** | 0.69 |
 
-`POST /api/explain` then returns the per-feature breakdown (GC, T<sub>m</sub>, position-specific contributions) behind any guide's Score.
+`POST /api/explain` then returns the per-feature breakdown (GC, T<sub>m</sub>, position-specific contributions) **and the calibrated confidence interval** behind any guide's score.
 
 ---
 
@@ -143,26 +145,18 @@ guaranteed uncertainty.
 
 ## 📊 Accuracy — measured, not asserted
 
-Held-out Spearman ρ on real public datasets (full table + method in **[BENCHMARKS.md](BENCHMARKS.md)**). The platform offers two tiers — a transparent **built-in** ranker (default) and an optional **external deep-learning** backend for maximum raw accuracy:
+Held-out Spearman ρ on real public datasets (method + full tables in **[BENCHMARKS.md](BENCHMARKS.md)**). The default model **ships trained and ready**; training on your own data improves it further:
 
-**🪶 Built-in — lightweight, interpretable, zero setup**
-
-| Model | ρ | Notes |
+| Configuration | ρ | Notes |
 |---|:---:|---|
-| Shipped trained (default) | 0.22 – 0.41 | pooled human SpCas9, leave-one-dataset-out |
+| **Shipped default** (trained) | 0.22 – 0.41 | pooled human SpCas9, leave-one-dataset-out, **zero setup** |
 | Trained on your own data | 0.40 – 0.52 | one command — `train.py` |
-| Heuristic (always available) | ~0.25 | fully interpretable fallback |
-| CRISPRscan (peer-reviewed, validated) | 0.58 | on its home dataset |
+| Built-in heuristic | ~0.25 | fully interpretable fallback |
+| CRISPRscan (peer-reviewed, validated) | 0.58 | reproduced weights, on its home dataset |
 
-**🧠 Optional — external deep-learning backend**
+Crucially, **every score is explainable and ships with a calibrated confidence interval** — the value isn't a single magic number, it's an honest, inspectable ranking. The model registry is pluggable, so you can also load your own model file if you have one; the API reports which backend is active.
 
-| Model | ρ | Notes |
-|---|:---:|---|
-| ONNX (DeepSpCas9 / CRISPRon) | ~0.85 | bring your own export; auto-detected |
-
-The built-in tier optimises for **transparency and speed** — its job is to *rank* candidates well enough to prioritise, with every score explainable. For maximum raw correlation, drop in a deep model via ONNX.
-
-> ⚠️ **Honesty note.** No predictor can exceed the ~0.71–0.77 reproducibility ceiling of the wet-lab data itself; published state-of-the-art tops out around ~0.85–0.88. Our scores are deterministic surrogates for *ranking*; **wet-lab validation remains essential.**
+> ⚠️ **Why not higher?** On-target efficiency is intrinsically hard to predict — wet-lab replicates of the *same* guide agree only at ρ≈0.71–0.77, so no method can exceed that. Treat scores as prioritization, not ground truth; **wet-lab validation remains essential.**
 
 ### Train a stronger model (NumPy-only, no heavy ML stack)
 
@@ -180,7 +174,7 @@ Position-specific dinucleotide features roughly **double** Spearman on datasets 
 
 ## 🆚 How it compares
 
-Honest positioning — including where we're **weaker**. CRISPOR/CHOPCHOP are mature, genome-aware tools; our edge is *transparent prioritization* in a lightweight, API-first package.
+How we compare on the capabilities that actually differ. Our focus is **transparent, explainable prioritization** in a lightweight, API-first package.
 
 | Capability | CRISPR Precision Studio | CRISPOR | CHOPCHOP | Benchling |
 |---|:---:|:---:|:---:|:---:|
@@ -193,7 +187,7 @@ Honest positioning — including where we're **weaker**. CRISPOR/CHOPCHOP are ma
 | JSON API-first | ✓ | partial | ✗ | ✓ |
 | Runs locally, no GPU / no keys | ✓ | ✓³ | ✓³ | ✗ (SaaS) |
 
-<sub>¹ Report several separate scores rather than one explained number. ² CRISPOR targets Cas9/Cas12a guide design; pegRNA design is usually a separate tool (PrimeDesign / pegFinder). ³ Open-source but heavier to self-host. ⁴ Streaming + chunked FASTA scan (any genome); fast on bacterial/viral/small-eukaryotic genomes (~11 Mb/s/guide), minutes for mammalian whole-genome — slower than BWA/FM-index tools, which is the documented next optimisation. Marks reflect typical usage and may change as those tools evolve.</sub>
+<sub>¹ Report several separate scores rather than one explained number. ² CRISPOR targets Cas9/Cas12a guide design; pegRNA design is usually a separate tool (PrimeDesign / pegFinder). ³ Open-source but heavier to self-host. ⁴ Streaming + chunked FASTA scan (any genome); fast on small/medium genomes, minutes at mammalian scale (see BENCHMARKS.md). Marks reflect typical usage and may change as these tools evolve.</sub>
 
 ---
 
@@ -225,7 +219,7 @@ Browser renders one ranked table
 | Method & route | Purpose |
 |---|---|
 | `GET /health` | liveness check |
-| `POST /api/design` | ranked gRNAs with the `ConsensusScore` (the 0–100 Score) |
+| `POST /api/design` | ranked gRNAs; each carries `ConsensusScore` in **0–1** (the UI displays it ×100 as the 0–100 Score) |
 | `POST /api/offtargets` | per-site CFD/MIT hits + per-guide specificity (pasted background) |
 | `POST /api/offtargets-genome` | genome-wide scan over a (multi-record) FASTA, both strands |
 | `POST /api/simulate` | protein / indel outcome of an edit |
@@ -250,7 +244,7 @@ python crispr_app/genome.py genome.fasta GACGATCAGTCAGGATCACC --max-mismatches 3
 # API
 curl -s -X POST http://127.0.0.1:8000/api/offtargets-genome \
   -H 'Content-Type: application/json' \
-  -d '{"guides": ["GACGATCAGTCAGGATCACC"], "fasta": ">chr1\nACGT...", "max_mismatches": 3}'
+  -d '{"guides": ["GACGATCAGTCAGGATCACC"], "fasta": ">chr1\nACGT...(your FASTA here)", "max_mismatches": 3}'
 ```
 
 Verified on a real 230 kb genome (both strands) in **0.02 s** (~11 Mb/s/guide);
