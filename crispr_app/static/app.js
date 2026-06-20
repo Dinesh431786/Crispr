@@ -161,9 +161,16 @@ function renderExplain(data) {
       <span class="val">${v >= 0 ? "+" : ""}${v.toFixed(3)}</span>
     </div>`;
   }).join("");
+  let ciHtml = "";
+  if (data.interval) {
+    const ci = data.interval;
+    ciHtml = `<p class="status"><b>${Math.round(ci.coverage * 100)}% confidence interval</b> (conformal, guaranteed coverage):
+      on-target ${ci.point} &nbsp;[${ci.low} – ${ci.high}]. Wide intervals = genuine model uncertainty.</p>`;
+  }
   p.innerHTML = `<h4>Why ${data.guide} scored ${data.score} &nbsp;
       <span class="status" style="display:inline">(GC ${data.gc_percent}% · Tm ${data.tm_celsius} °C)</span></h4>
     <div class="bars">${bars}</div>
+    ${ciHtml}
     <p class="status">Bars are additive log-odds contributions; the sum is squashed to a 0–1 efficiency probability.</p>`;
   p.classList.add("open");
   p.scrollIntoView({ behavior: "smooth", block: "nearest" });

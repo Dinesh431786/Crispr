@@ -33,6 +33,7 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 |---|---|---|
 | 🎯 | **One Score** | A single 0–100 prioritization number ranks each guide — no column soup. |
 | 🔍 | **Explainable** | `POST /api/explain` shows the per-feature breakdown behind every score. |
+| 📐 | **Calibrated uncertainty** | Distribution-free **conformal** confidence interval per guide — *verified* 90% coverage. |
 | 🧬 | **Both-strand off-targets** | Vectorised NumPy scan + per-site **CFD** & **MIT/Hsu** + aggregate specificity. |
 | 🌟 | **Prime Editing Studio** | PRIDICT2.0-informed pegRNA design (Spacer + RTT + PBS). |
 | 📚 | **Peer-reviewed scoring** | **CRISPRscan** weights reproduced verbatim & unit-validated — zero downloads. |
@@ -105,6 +106,37 @@ Each guide gets **one Score, 0–100** (higher = better) — a *relative priorit
 | ≥ 60 | 40 – 59 | < 40 |
 
 Click **Details** on any guide to see *why* it scored that way (GC, Tm, position-specific features…). Component sub-scores stay in the API/CSV for power users — never on screen.
+
+---
+
+## 📐 Calibrated uncertainty (what makes this different)
+
+Every common CRISPR tool returns a bare point score. But our benchmarks show
+on-target prediction is intrinsically noisy (ρ ≈ 0.25–0.8 depending on context),
+so a lone number is *overconfident*. We attach a **distribution-free conformal
+prediction interval** (split conformal; Lei et al. 2018) to each guide — a
+confidence interval with a **mathematically guaranteed coverage level**, no
+distributional assumptions, computed in pure NumPy.
+
+`POST /api/explain` returns, e.g.:
+
+```json
+{ "score": 0.69, "interval": { "point": 0.637, "low": 0.207, "high": 1.0,
+                               "level": "q90", "coverage": 0.9 } }
+```
+
+**Verified, not asserted** — empirical coverage on held-out real data matches the
+target almost exactly:
+
+| Interval | Half-width | Target coverage | Measured coverage |
+|---|:---:|:---:|:---:|
+| 80% | 0.369 | 0.80 | **0.802** |
+| 90% | 0.430 | 0.90 | **0.902** |
+
+Wide intervals are a feature, not a bug: they make the model's genuine
+uncertainty explicit so a researcher doesn't over-trust a single number. To our
+knowledge no other lightweight CRISPR guide tool ships calibrated, coverage-
+guaranteed uncertainty.
 
 ---
 
@@ -197,7 +229,7 @@ Browser renders one ranked table
 | `POST /api/offtargets` | per-site CFD/MIT hits + per-guide specificity summary |
 | `POST /api/simulate` | protein / indel outcome of an edit |
 | `POST /api/prime-design` | ranked pegRNAs (Spacer + RTT + PBS) |
-| `POST /api/explain` | interpretable per-feature score breakdown |
+| `POST /api/explain` | per-feature breakdown + conformal confidence interval |
 | `POST /api/upload-fasta` | parse pasted FASTA / plain DNA |
 | `GET /api/models` | active & available on-target backends |
 

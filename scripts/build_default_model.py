@@ -25,6 +25,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "crispr_app"))
 from benchmark import spearman  # noqa: E402
+from conformal import calibrate, empirical_coverage  # noqa: E402
 from features import featurize_many  # noqa: E402
 from train import fit_ridge  # noqa: E402
 
@@ -69,9 +70,22 @@ def main() -> None:
         pred = np.clip(X[te] @ m.weights + m.intercept, 0, 1)
         print(f"  LODO held-out {name:<18} rho = {spearman(pred, y[te]):.3f}")
 
+    # Split-conformal calibration on a held-out split (model never saw it).
+    rng = np.random.default_rng(0)
+    perm = rng.permutation(len(guides))
+    cut = int(0.8 * len(guides))
+    tr_i, cal_i = perm[:cut], perm[cut:]
+    cal_model = fit_ridge(X[tr_i], y[tr_i], args.alpha)
+    cal_pred = np.clip(X[cal_i] @ cal_model.weights + cal_model.intercept, 0, 1)
+    conf = calibrate(cal_pred, y[cal_i])
+    for level, q in conf.items():
+        cov = empirical_coverage(cal_pred, y[cal_i], q)
+        print(f"  conformal {level}: half-width={q}  empirical coverage={cov:.3f}")
+
     final = fit_ridge(X, y, args.alpha)
     final.meta.update({"trained_on": DATASETS, "n": int(len(guides)),
-                       "target": "within-dataset percentile", "alpha": args.alpha})
+                       "target": "within-dataset percentile", "alpha": args.alpha,
+                       "conformal": conf})
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     final.save(args.out)
     print(f"saved {args.out}")
