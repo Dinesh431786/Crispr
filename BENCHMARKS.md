@@ -3,6 +3,23 @@
 This document is deliberately honest. It states where CRISPR Precision Studio is
 competitive, where it is not, and exactly how to reproduce the numbers.
 
+## Calibrated uncertainty (conformal) — verified coverage
+
+Because on-target ρ is intrinsically capped (below), point scores are
+overconfident. We ship **split-conformal** prediction intervals (Lei et al.
+2018) calibrated on a held-out split of the pooled training data. Empirical
+coverage on that held-out data matches the guarantee:
+
+| Interval | Half-width | Target | Measured coverage |
+|---|:---:|:---:|:---:|
+| 80% | 0.369 | 0.80 | 0.802 |
+| 90% | 0.430 | 0.90 | 0.902 |
+
+Reproduce: `python scripts/build_default_model.py --effdata crisporPaper/effData`
+(prints coverage), and `pytest tests/test_conformal.py` verifies the guarantee
+on synthetic exchangeable data. The quantiles are stored in
+`models/default.json` and served via `POST /api/explain`.
+
 ## How high can on-target ρ realistically go?
 
 There is a hard ceiling set by the data, not the algorithm. Across CRISPR

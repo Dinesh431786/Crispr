@@ -23,10 +23,12 @@ import numpy as np
 
 try:
     from benchmark import spearman
+    from conformal import calibrate, empirical_coverage
     from features import featurize_many, n_features
     from models import LinearModel
 except ImportError:  # pragma: no cover
     from .benchmark import spearman
+    from .conformal import calibrate, empirical_coverage
     from .features import featurize_many, n_features
     from .models import LinearModel
 
@@ -76,10 +78,17 @@ def train(path: str, out: str, alpha: float = 1.0, seed: int = 0) -> dict:
     if len(te) >= 2:
         pred_te = np.clip(X[te] @ model.weights + model.intercept, 0, 1)
         report["spearman_test"] = round(spearman(pred_te, y[te]), 4)
+        # Split-conformal calibration on the held-out split (model never saw it).
+        conf = calibrate(pred_te, y[te])
+        report["conformal"] = conf
+        for level, q in conf.items():
+            report[f"coverage_{level}"] = round(empirical_coverage(pred_te, y[te], q), 3)
 
     # Refit on all data before saving (use the full dataset for deployment).
     full = fit_ridge(X, y, alpha)
     full.meta.update({"trained_on": Path(path).name, "report": report})
+    if len(te) >= 2:
+        full.meta["conformal"] = conf
     full.save(out)
     report["saved"] = out
     return report

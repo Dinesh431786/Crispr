@@ -22,9 +22,11 @@ from pathlib import Path
 import numpy as np
 
 try:
+    from conformal import interval as _conf_interval
     from features import featurize
     from scoring import on_target_score
 except ImportError:  # pragma: no cover
+    from .conformal import interval as _conf_interval
     from .features import featurize
     from .scoring import on_target_score
 
@@ -137,6 +139,24 @@ def predict_on_target(guide: str, ngg_context: str | None = None, backend: str =
             except Exception:
                 pass
     return on_target_score(guide, ngg_context)
+
+
+def predict_interval(guide: str, ngg_context: str | None = None, level: str = "q90") -> dict | None:
+    """Conformal prediction interval for the on-target score, if calibrated.
+
+    Returns {"point", "low", "high", "level", "coverage"} on the 0-1 scale, or
+    None when the active model has no conformal calibration (e.g. heuristic).
+    """
+    lm = _load_linear()
+    if lm is None or active_backend() == "onnx":
+        return None
+    conf = (lm.meta or {}).get("conformal") or {}
+    if level not in conf:
+        return None
+    point = lm.predict(guide, ngg_context)
+    lo, hi = _conf_interval(point, float(conf[level]))
+    return {"point": point, "low": lo, "high": hi, "level": level,
+            "coverage": int(level[1:]) / 100.0}
 
 
 def reset_caches() -> None:

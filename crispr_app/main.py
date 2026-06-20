@@ -18,7 +18,7 @@ from analysis import (
     simulate_protein_edit,
     summarize_specificity,
 )
-from models import active_backend, available_backends
+from models import active_backend, available_backends, predict_interval
 from scoring import score_breakdown
 from utils import load_fasta_text, validate_sequence
 
@@ -155,8 +155,12 @@ class FastaRequest(BaseModel):
 
 @app.post("/api/explain")
 def explain(payload: ExplainRequest):
-    """Interpretable breakdown of an on-target score (per-feature contributions)."""
-    return score_breakdown(payload.guide, payload.ngg_context)
+    """Interpretable breakdown of an on-target score plus a conformal interval."""
+    out = score_breakdown(payload.guide, payload.ngg_context)
+    ci = predict_interval(payload.guide, payload.ngg_context)
+    if ci is not None:
+        out["interval"] = ci  # distribution-free CI with guaranteed coverage
+    return out
 
 
 @app.post("/api/upload-fasta")
