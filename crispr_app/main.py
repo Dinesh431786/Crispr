@@ -92,7 +92,10 @@ class PrimeDesignRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 def ui(request: Request):
-    return templates.TemplateResponse(request, "index.html", {"asset_v": ASSET_V})
+    resp = templates.TemplateResponse(request, "index.html", {"asset_v": ASSET_V})
+    # Never cache the HTML shell, so updated UI (and versioned assets) always load.
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
 
 
 @app.post("/api/design")
