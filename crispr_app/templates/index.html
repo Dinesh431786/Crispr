@@ -15,6 +15,7 @@
         <nav>
           <a href="#design">Design</a>
           <a href="#offtarget">Specificity</a>
+          <a href="#simulate">Edit outcome</a>
           <a href="#prime">Prime Editing</a>
           <a href="https://github.com/Dinesh431786/Crispr#-api-reference" target="_blank" rel="noopener">API docs</a>
         </nav>
@@ -103,9 +104,34 @@
         <div class="table-wrap"><table id="offTable"><tbody><tr><td class="empty">Per-site CFD &amp; MIT/Hsu hits appear here.</td></tr></tbody></table></div>
       </section>
 
-      <section class="card" id="prime">
+      <section class="card" id="simulate">
         <div class="card-head">
           <span class="step">3</span>
+          <h2>Edit outcome simulation</h2>
+          <span class="sub">protein · frameshift · indels</span>
+        </div>
+        <p class="status">Predict the protein consequence of a cut. Pick a designed guide (+ strand) and an edit, and see the before/after protein, frameshift, and an indel panel.</p>
+        <div class="grid">
+          <label>Guide (from design)
+            <select id="simGuide"><option value="">— design guides first —</option></select>
+          </label>
+          <label>Edit
+            <select id="editType">
+              <option value="del1">1 bp deletion</option>
+              <option value="del3">3 bp deletion (in-frame)</option>
+              <option value="insA">1 bp insertion</option>
+            </select>
+          </label>
+        </div>
+        <div class="row"><button id="simBtn" disabled>Simulate edit</button></div>
+        <p class="status" id="simSummary"></p>
+        <div class="explain" id="simPanel"></div>
+        <div class="table-wrap"><table id="indelTable"></table></div>
+      </section>
+
+      <section class="card" id="prime">
+        <div class="card-head">
+          <span class="step">4</span>
           <h2>Prime Editing Studio</h2>
           <span class="sub">pegRNA · Spacer + RTT + PBS</span>
         </div>

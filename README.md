@@ -36,6 +36,7 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 | 📐 | **Calibrated uncertainty** | Distribution-free **conformal** confidence interval per guide — *verified* 90% coverage. |
 | 🧬 | **Both-strand off-targets** | Vectorised NumPy scan + per-site **CFD** & **MIT/Hsu** + aggregate specificity. |
 | 🌍 | **Genome-wide search** | Stream any (multi-chromosome) FASTA; memory-safe chunked scan, both strands. |
+| 🧫 | **Edit-outcome simulation** | Predict the protein consequence of a cut — frameshift, stop loss, indel panel. |
 | 🌟 | **Prime Editing Studio** | PRIDICT2.0-informed pegRNA design (Spacer + RTT + PBS). |
 | 📚 | **Peer-reviewed scoring** | **CRISPRscan** weights reproduced verbatim & unit-validated — zero downloads. |
 | 🔌 | **Pluggable models** | `onnx → trained-linear → heuristic`, auto-selected and reported. |
