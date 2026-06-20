@@ -153,6 +153,13 @@ class FastaRequest(BaseModel):
     contents: str
 
 
+class GenomeOffTargetRequest(BaseModel):
+    guides: list[str]
+    fasta: str
+    max_mismatches: int = Field(3, ge=0, le=4)
+    pam: str = "NGG"
+
+
 @app.post("/api/explain")
 def explain(payload: ExplainRequest):
     """Interpretable breakdown of an on-target score plus a conformal interval."""
@@ -170,6 +177,24 @@ def upload_fasta(payload: FastaRequest):
     if not sequence:
         raise HTTPException(status_code=400, detail=message or "Could not parse FASTA.")
     return {"sequence": sequence, "length": len(sequence), "message": message}
+
+
+@app.post("/api/offtargets-genome")
+def offtargets_genome(payload: GenomeOffTargetRequest):
+    """Genome-wide off-target scan over a (multi-record) FASTA, both strands."""
+    from genome import genome_specificity, scan_fasta_text
+
+    guides = [g.strip().upper() for g in payload.guides if g.strip()]
+    if not guides:
+        raise HTTPException(status_code=400, detail="No guides provided.")
+    hits = scan_fasta_text(payload.fasta, guides, payload.max_mismatches, payload.pam)
+    spec = genome_specificity(hits, guides)
+    top = hits.sort_values("CFD_Score", ascending=False).head(500) if not hits.empty else hits
+    return {
+        "count": int(len(hits)),
+        "off_targets": top.to_dict(orient="records"),
+        "specificity": spec.to_dict(orient="records"),
+    }
 
 
 @app.get("/api/models")
