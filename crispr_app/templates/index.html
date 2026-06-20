@@ -74,6 +74,7 @@
           <button class="ghost" id="exportGuidesBtn" disabled>Export CSV</button>
         </div>
         <p class="status" id="guideSummary">No guides yet — paste a sequence and run design.</p>
+        <div class="reccard" id="recCard" hidden></div>
         <div class="legend">
           <span>One <b>Score</b> (0–100) per guide for prioritization — relative ranking, not a literal % editing rate:</span>
           <span><span class="dot good"></span> high (≥60)</span>
@@ -105,6 +106,7 @@
         </div>
         <p class="status" id="offSummary">Design guides first, then scan a pasted background or upload a genome FASTA.</p>
         <div class="spec-grid" id="specGrid"></div>
+        <p class="status" style="margin-top:0"><b>CFD</b> &amp; <b>MIT/Hsu</b> score how likely a near-match site is to be cut (0–1 / 0–100); <b>specificity</b> aggregates them into a per-guide uniqueness score (higher = safer).</p>
         <div class="table-wrap"><table id="offTable"><tbody><tr><td class="empty">Per-site CFD &amp; MIT/Hsu hits appear here.</td></tr></tbody></table></div>
       </section>
 

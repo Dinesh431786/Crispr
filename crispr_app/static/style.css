@@ -265,6 +265,30 @@ th.sortable { cursor: pointer; user-select: none; }
 th.sortable:hover { color: var(--brand-ink); }
 th .arrow { opacity: 0.5; font-size: 0.7rem; }
 
+/* Recommended-guide card — makes the "explain" story impossible to miss */
+.reccard {
+  border: 1px solid #cfe3d8;
+  border-left: 4px solid var(--good);
+  background: linear-gradient(180deg, #f1faf5, #ffffff);
+  border-radius: var(--radius);
+  padding: 1rem 1.15rem 1.1rem;
+  margin: 1rem 0 0.4rem;
+  box-shadow: var(--shadow);
+}
+.reccard h3 { margin: 0 0 0.5rem; font-size: 1rem; letter-spacing: -0.01em; }
+.reccard .recseq { font-family: var(--mono); font-size: 0.95rem; font-weight: 700; word-break: break-all; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.7rem 0; }
+.chip {
+  font-size: 0.76rem; color: var(--ink-soft);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 999px; padding: 0.3rem 0.62rem; white-space: nowrap;
+}
+.chip b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.chip.score b { color: var(--good); }
+.reccard .why { font-size: 0.86rem; color: var(--ink-soft); }
+.reccard .why b { color: var(--ink); }
+.reccard .bars { margin-top: 0.7rem; }
+
 /* Guide position map */
 .map { margin: 0.9rem 0 0.2rem; }
 .map svg { width: 100%; display: block; }
