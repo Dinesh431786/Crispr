@@ -130,20 +130,80 @@ function renderGuideMap(guides) {
   const el = $("guideMap");
   const seqLen = ($("dna").value.match(/[ACGTacgt]/g) || []).length;
   if (!guides.length || !seqLen) { el.innerHTML = ""; return; }
-  const W = 1000, H = 70, mid = 35;
-  const x = (s) => Math.max(2, Math.min(W - 2, (s / seqLen) * W));
+  const W = 1000, H = 110, mid = 55;
+  const x = (s) => Math.max(3, Math.min(W - 3, (s / seqLen) * W));
   const color = (v) => (v >= 0.6 ? "var(--good)" : v >= 0.4 ? "var(--mid)" : "var(--low)");
   const ticks = guides.map((g) => {
     const cx = x(g.Start).toFixed(1), top = g.Strand === "+";
-    const y1 = top ? mid - 3 : mid + 3, y2 = top ? 12 : H - 12;
-    return `<line x1="${cx}" x2="${cx}" y1="${y1}" y2="${y2}" stroke="${color(g.ConsensusScore)}" stroke-width="2"><title>${g.gRNA} • ${g.Strand} strand • start ${g.Start} • score ${Math.round(g.ConsensusScore * 100)}</title></line>`;
+    const y1 = top ? mid - 4 : mid + 4, y2 = top ? 16 : H - 18;
+    return `<line x1="${cx}" x2="${cx}" y1="${y1}" y2="${y2}" stroke="${color(g.ConsensusScore)}" stroke-width="2.5" stroke-linecap="round"><title>${g.gRNA} • ${g.Strand} strand • start ${g.Start} • score ${Math.round(g.ConsensusScore * 100)}</title></line>`;
   }).join("");
   el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="guide position map">
+    <text class="tick" x="2" y="12">+ strand</text>
+    <text class="tick" x="2" y="${H - 4}">− strand · 0</text>
+    <text class="tick" x="${W - 2}" y="${H - 4}" text-anchor="end">${seqLen} bp</text>
     <line class="axis" x1="0" x2="${W}" y1="${mid}" y2="${mid}"></line>
-    <text class="tick" x="2" y="${H - 2}">0</text>
-    <text class="tick" x="${W - 2}" y="${H - 2}" text-anchor="end">${seqLen} bp</text>
     ${ticks}
-  </svg><div class="map-legend">Guide positions along the target — above the line = + strand, below = − strand; colour = score.</div>`;
+  </svg><div class="map-legend">Each tick = a candidate guide along the target (hover for details); above = + strand, below = − strand; colour = score (green/amber/red).</div>`;
+}
+
+function buildReason(bd, g) {
+  const c = (bd && bd.contributions) || {};
+  const r = [];
+  if ((c.gc_content ?? -1) > -0.15) r.push(`balanced GC content (${g["GC%"]}%)`);
+  else r.push(`GC content (${g["GC%"]}%) outside the ideal 50–65% window`);
+  if ((c.melting_temp ?? 0) > 0.1) r.push("favourable melting temperature");
+  if ((c.position_specific_nt ?? 0) > 0.02) r.push("favourable nucleotides near the PAM");
+  if ((c.homopolymer_penalty ?? 0) < 0) r.push("a homopolymer run (penalised)");
+  else r.push("no homopolymer runs");
+  return r.join(", ") + ".";
+}
+
+async function renderRecommendation(g) {
+  const el = $("recCard");
+  if (!g) { el.hidden = true; return; }
+  let bd = null;
+  try { bd = await postJSON("/api/explain", { guide: g.gRNA }); } catch (_) {}
+  const pct = (v) => Math.round(Number(v) * 100);
+  const eff = pct(g.OnTargetScore != null ? g.OnTargetScore : g.MLScore);
+  const cscan = typeof g.CRISPRScanScore === "number" ? pct(g.CRISPRScanScore) : null;
+  const ci = g.CI_low != null ? `${g.CI_low}–${g.CI_high}` : null;
+  const chips = [
+    `<span class="chip score">Final score <b>${pct(g.ConsensusScore)}</b></span>`,
+    `<span class="chip">On-target efficiency <b>${eff}</b></span>`,
+    `<span class="chip">GC <b>${g["GC%"]}%</b></span>`,
+    cscan != null ? `<span class="chip">CRISPRscan <b>${cscan}</b></span>` : "",
+    ci ? `<span class="chip">90% CI <b>${ci}</b></span>` : "",
+    `<span class="chip">Off-target risk <b>${lastSpec.length ? specWord(g.gRNA) : "scan ↓"}</b></span>`,
+  ].join("");
+  // Inline per-feature breakdown bars (the "explain" made visible by default).
+  let bars = "";
+  if (bd && bd.contributions) {
+    const entries = Object.entries(bd.contributions).filter(([k]) => k !== "intercept");
+    const max = Math.max(0.25, ...entries.map(([, v]) => Math.abs(v)));
+    bars = `<div class="bars">${entries.map(([name, v]) => {
+      const w = (Math.abs(v) / max) * 50;
+      const side = v >= 0 ? `left:50%;width:${w}%` : `right:50%;width:${w}%`;
+      return `<div class="bar-row"><span class="name">${name.replace(/_/g, " ")}</span>
+        <span class="bar-track"><span class="bar-mid"></span><span class="bar-fill ${v >= 0 ? "pos" : "neg"}" style="${side}"></span></span>
+        <span class="val">${v >= 0 ? "+" : ""}${v.toFixed(3)}</span></div>`;
+    }).join("")}</div>`;
+  }
+  el.innerHTML = `<h3>★ Recommended guide — #1 of ${lastGuides.length}</h3>
+    <div class="recseq">${g.gRNA}<span class="pam">${g.PAM}</span> ${copyBtn(g.gRNA)}
+      <span class="status" style="display:inline">(${g.Strand} strand · start ${g.Start})</span></div>
+    <div class="chips">${chips}</div>
+    <div class="why"><b>Why this guide:</b> ${buildReason(bd, g)}</div>
+    ${bars}
+    <p class="status" style="margin:.5rem 0 0">Bars show each sequence feature's contribution to the on-target score${ci ? `; the 90% interval [${ci}] reflects genuine model uncertainty` : ""}.</p>`;
+  el.hidden = false;
+}
+
+function specWord(guide) {
+  const s = lastSpec.find((x) => x.gRNA === guide);
+  if (!s) return "scan ↓";
+  const v = s.CFD_Specificity;
+  return v >= 80 ? `low (${v})` : v >= 50 ? `moderate (${v})` : `high (${v})`;
 }
 
 function renderSpecificity(spec) {
@@ -273,8 +333,10 @@ $("designBtn").onclick = async () => {
       max_gc: Number($("maxGc").value),
     });
     lastGuides = data.top_guides;
+    lastSpec = [];
     sortState = { col: "ConsensusScore", dir: -1 };
     sortAndRenderGuides();
+    renderRecommendation(lastGuides[0]);
     setStatus($("guideSummary"), `Designed ${data.count} candidate guides — showing top ${Math.min(lastGuides.length, 100)}, ranked by score.`);
     $("exportGuidesBtn").disabled = !lastGuides.length;
     $("offBtn").disabled = !lastGuides.length;
@@ -308,6 +370,7 @@ $("offBtn").onclick = async () => {
     lastSpec = data.specificity || [];
     renderSpecificity(lastSpec);
     renderOff(lastOff);
+    if (lastGuides.length) renderRecommendation(lastGuides[0]);  // fill in the off-target risk chip
     setStatus($("offSummary"), `${data.count} candidate off-target loci across both strands. Specificity (0–100, higher is better) summarised per guide below.`);
     $("exportOffBtn").disabled = !lastOff.length;
   } catch (e) { setStatus($("offSummary"), e.message, true); }
