@@ -94,9 +94,9 @@ Real output → 21 guides found. Top 3 (the API returns `ConsensusScore` in 0–
 
 | # | Guide (5′→3′) | PAM | Strand | GC% | Score | `ConsensusScore` |
 |---|---|:---:|:---:|:---:|:---:|:---:|
-| 1 | `GATGTGGCGGTCCGGATCGA` | CGG | − | 65 | **74** | 0.74 |
-| 2 | `AAGGTGTGGGTCGCGGACGA` | CGG | + | 65 | **74** | 0.74 |
-| 3 | `ATCGACGGTGTGGCGCGTGG` | CGG | − | 70 | **69** | 0.69 |
+| 1 | `AAGGTGTGGGTCGCGGACGA` | CGG | + | 65 | **72** | 0.718 |
+| 2 | `ATCGACGGTGTGGCGCGTGG` | CGG | − | 70 | **70** | 0.698 |
+| 3 | `GATGTGGCGGTCCGGATCGA` | CGG | − | 65 | **70** | 0.698 |
 
 `POST /api/explain` then returns the per-feature breakdown (GC, T<sub>m</sub>, position-specific contributions) **and the calibrated confidence interval** behind any guide's score.
 
