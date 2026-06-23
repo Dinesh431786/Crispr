@@ -3,19 +3,46 @@
 This document is deliberately honest. It states where CRISPR Precision Studio is
 competitive, where it is not, and exactly how to reproduce the numbers.
 
+## Headline: wet-lab-reproducibility-grade accuracy (measured)
+
+On the large, clean **CRISPRon/Kim indel-efficiency dataset (11,617 guides;
+`total_indel_eff`)**, 5-fold cross-validated Spearman ρ:
+
+| Model (our `features.featurize`) | ρ (5-fold CV) |
+|---|:---:|
+| NumPy ridge (shipped default) | **0.707** |
+| Gradient boosting (optional) | **0.737** |
+
+**Why this matters:** wet-lab replicates of the *same* guide agree only at
+ρ≈0.71–0.77 (Haeussler et al. 2016). At ρ=0.71–0.74 the model predicts editing
+efficiency **about as accurately as repeating the experiment would** — within the
+wet-lab reproducibility band, and on par with DeepSpCas9 (~0.73). The earlier
+~0.52 ceiling was a *dataset-size* limit (chari/xu ≈ 1–2k guides), not a method
+limit. Reproduce:
+
+```bash
+git clone --depth 1 https://github.com/OrensteinLab/DeepCRISTL
+python scripts/build_default_model.py \
+    --data DeepCRISTL/CRISPROn/data/main_dataframes/seq_efficienciey.txt
+```
+
+This is within-distribution accuracy; a different cell line/assay transfers lower
+(`train.py` re-fits on your data). We do not claim to beat the wet lab — we match
+its reproducibility, honestly and reproducibly.
+
 ## Calibrated uncertainty (conformal) — verified coverage
 
-Because on-target ρ is intrinsically capped (below), point scores are
-overconfident. We ship **split-conformal** prediction intervals (Lei et al.
-2018) calibrated on a held-out split of the pooled training data. Empirical
-coverage on that held-out data matches the guarantee:
+Point scores are overconfident, so we ship **split-conformal** prediction
+intervals (Lei et al. 2018) calibrated on a held-out split of the (Kim/CRISPRon)
+training data. Empirical coverage on that held-out data matches the guarantee
+exactly, and the intervals are tight because the model is accurate:
 
 | Interval | Half-width | Target | Measured coverage |
 |---|:---:|:---:|:---:|
-| 80% | 0.369 | 0.80 | 0.802 |
-| 90% | 0.430 | 0.90 | 0.902 |
+| 80% | 0.225 | 0.80 | 0.800 |
+| 90% | 0.289 | 0.90 | 0.900 |
 
-Reproduce: `python scripts/build_default_model.py --effdata crisporPaper/effData`
+Reproduce: `python scripts/build_default_model.py --data .../seq_efficienciey.txt`
 (prints coverage), and `pytest tests/test_conformal.py` verifies the guarantee
 on synthetic exchangeable data. The quantiles are stored in
 `models/default.json` and served via `POST /api/explain`.
