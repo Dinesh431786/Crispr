@@ -175,6 +175,9 @@ async function renderRecommendation(g) {
     cscan != null ? `<span class="chip">CRISPRscan <b>${cscan}</b></span>` : "",
     ci ? `<span class="chip">90% CI <b>${ci}</b></span>` : "",
     `<span class="chip">Off-target risk <b>${lastSpec.length ? specWord(g.gRNA) : "scan ↓"}</b></span>`,
+    (bd && bd.self_complementarity != null)
+      ? `<span class="chip" title="Structural QC: spacer self-folding propensity. Informational — not part of the score.">Self-folding <b>${scWord(bd.self_complementarity)}</b></span>`
+      : "",
   ].join("");
   // Inline per-feature breakdown bars (the "explain" made visible by default).
   let bars = "";
@@ -189,7 +192,9 @@ async function renderRecommendation(g) {
         <span class="val">${v >= 0 ? "+" : ""}${v.toFixed(3)}</span></div>`;
     }).join("")}</div>`;
   }
+  const verdict = buildVerdict(g);
   el.innerHTML = `<h3>★ Recommended guide — #1 of ${lastGuides.length}</h3>
+    <div class="verdict ${verdict.cls}">${verdict.text}</div>
     <div class="recseq">${g.gRNA}<span class="pam">${g.PAM}</span> ${copyBtn(g.gRNA)}
       <span class="status" style="display:inline">(${g.Strand} strand · start ${g.Start})</span></div>
     <div class="chips">${chips}</div>
@@ -197,6 +202,27 @@ async function renderRecommendation(g) {
     ${bars}
     <p class="status" style="margin:.5rem 0 0">Bars show each sequence feature's contribution to the on-target score${ci ? `; the 90% interval [${ci}] reflects genuine model uncertainty` : ""}.</p>`;
   el.hidden = false;
+}
+
+function buildVerdict(g) {
+  // Fuse on-target efficiency + (if scanned) off-target specificity into one
+  // decision-grade verdict. Honest: it's a prioritization aid, not a guarantee.
+  const eff = Number(g.ConsensusScore);
+  const spec = lastSpec.find((x) => x.gRNA === g.gRNA);
+  const effHi = eff >= 0.6, effLo = eff < 0.4;
+  if (!spec) {
+    const t = effHi ? "high predicted efficiency" : effLo ? "modest predicted efficiency" : "moderate predicted efficiency";
+    return { cls: effHi ? "good" : effLo ? "low" : "mid", text: `Prioritized for ${t}. Run the off-target scan to assess specificity.` };
+  }
+  const sp = spec.CFD_Specificity, specHi = sp >= 80, specLo = sp < 50;
+  if (effHi && specHi) return { cls: "good", text: "✓ Strong candidate — high predicted efficiency and high specificity." };
+  if (specLo) return { cls: "low", text: `⚠ Caution — ${spec.OffTargetCount} off-target site(s), specificity ${sp}. Consider an alternative guide.` };
+  if (effLo) return { cls: "mid", text: `Usable — specificity ${sp}, but modest predicted efficiency.` };
+  return { cls: "mid", text: `Reasonable candidate — efficiency and specificity (${sp}) both acceptable.` };
+}
+
+function scWord(v) {
+  return v >= 0.6 ? `high (${v})` : v >= 0.35 ? `moderate (${v})` : `low (${v})`;
 }
 
 function specWord(guide) {

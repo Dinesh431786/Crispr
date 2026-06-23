@@ -23,12 +23,13 @@ from analysis import (
 from base_edit import summarize as base_edit_summarize
 from models import active_backend, available_backends, predict_interval
 from scoring import score_breakdown
+from structure import self_complementarity
 from utils import load_fasta_text, validate_sequence
 
 BASE_DIR = Path(__file__).resolve().parent
 MAX_SEQ = 200_000  # input guard: max DNA characters accepted by JSON endpoints
 
-app = FastAPI(title="CRISPR Precision Studio", version="3.1.0")
+app = FastAPI(title="CRISPR Precision Studio", version="3.2.0")
 
 # CORS: configurable for deployment. Default "*" (open) but WITHOUT credentials,
 # which is the only spec-valid combination; set CRISPR_CORS_ORIGINS to a
@@ -202,6 +203,9 @@ def explain(payload: ExplainRequest):
     ci = predict_interval(payload.guide, payload.ngg_context)
     if ci is not None:
         out["interval"] = ci  # distribution-free CI with guaranteed coverage
+    # Informational structural QC (NOT part of the score: in our benchmarks it
+    # showed no independent effect on efficiency — flagged for transparency only).
+    out["self_complementarity"] = self_complementarity(payload.guide)
     return out
 
 

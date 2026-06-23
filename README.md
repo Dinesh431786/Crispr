@@ -31,8 +31,8 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 
 | | Feature | What it means |
 |---|---|---|
-| 🎯 | **One Score** | A single 0–100 prioritization number ranks each guide — no column soup. |
-| 🔍 | **Explainable** | `POST /api/explain` shows the per-feature breakdown behind every score. |
+| 🎯 | **One Score + verdict** | A single 0–100 score, plus a recommended-guide card that fuses efficiency + specificity + uncertainty into a plain-language verdict. |
+| 🔍 | **Explainable** | Per-feature breakdown shown *by default*; plus an informational self-folding (secondary-structure) QC flag. |
 | 📐 | **Calibrated uncertainty** | Distribution-free **conformal** confidence interval per guide — *verified* 90% coverage. |
 | 🧬 | **Both-strand off-targets** | Vectorised NumPy scan + per-site **CFD** & **MIT/Hsu** + aggregate specificity. |
 | 🌍 | **Genome-wide search** | Stream any (multi-chromosome) FASTA; memory-safe chunked scan, both strands. |
