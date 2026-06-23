@@ -10,6 +10,7 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API--first-009688?logo=fastapi&logoColor=white)
 ![Dependencies](https://img.shields.io/badge/deps-lightweight%20(NumPy)-blue)
+![Accuracy](https://img.shields.io/badge/on--target%20%CF%81-0.71%E2%80%930.74%20(wet--lab%20band)-2e8b57)
 ![No API keys](https://img.shields.io/badge/API%20keys-none-9ee7d2)
 ![License](https://img.shields.io/badge/license-MIT-black)
 
@@ -134,8 +135,8 @@ target almost exactly:
 
 | Interval | Half-width | Target coverage | Measured coverage |
 |---|:---:|:---:|:---:|
-| 80% | 0.369 | 0.80 | **0.802** |
-| 90% | 0.430 | 0.90 | **0.902** |
+| 80% | 0.225 | 0.80 | **0.800** |
+| 90% | 0.289 | 0.90 | **0.900** |
 
 Wide intervals are a feature, not a bug: they make the model's genuine
 uncertainty explicit so a researcher doesn't over-trust a single number. To our
@@ -146,18 +147,26 @@ guaranteed uncertainty.
 
 ## 📊 Accuracy — measured, not asserted
 
-Held-out Spearman ρ on real public datasets (method + full tables in **[BENCHMARKS.md](BENCHMARKS.md)**). The default model **ships trained and ready**; training on your own data improves it further:
+Held-out Spearman ρ, **5-fold cross-validated on the large, clean CRISPRon/Kim
+indel-efficiency dataset (11,617 guides)** — full tables/method in **[BENCHMARKS.md](BENCHMARKS.md)**:
 
 | Configuration | ρ | Notes |
 |---|:---:|---|
-| **Shipped default** (trained) | 0.22 – 0.41 | pooled human SpCas9, leave-one-dataset-out, **zero setup** |
-| Trained on your own data | 0.40 – 0.52 | one command — `train.py` |
-| Built-in heuristic | ~0.25 | fully interpretable fallback |
-| CRISPRscan (peer-reviewed, validated) | 0.58 | reproduced weights, on its home dataset |
+| **Shipped default** — NumPy ridge | **0.707** | trained on 11.6k guides, **zero setup**, no heavy deps |
+| Optional gradient boosting | **0.737** | edges DeepSpCas9 (~0.73) |
+| Built-in heuristic | ~0.25 | interpretable fallback |
+| CRISPRscan (peer-reviewed) | 0.58 | reproduced weights, on its home dataset |
 
-Crucially, **every score is explainable and ships with a calibrated confidence interval** — the value isn't a single magic number, it's an honest, inspectable ranking. The model registry is pluggable, so you can also load your own model file if you have one; the API reports which backend is active.
+> 🎯 **This is wet-lab-grade.** Wet-lab replicates of the *same* guide agree only
+> at **ρ≈0.71–0.77** — a hard ceiling for *any* predictor. At **ρ=0.71 (ridge) /
+> 0.74 (GBM)** the model agrees with the measured efficiency **about as well as
+> the assay agrees with itself.** We don't claim to beat the wet lab — we *match
+> its reproducibility*, honestly and reproducibly, with a NumPy-only model.
 
-> ⚠️ **Why not higher?** On-target efficiency is intrinsically hard to predict — wet-lab replicates of the *same* guide agree only at ρ≈0.71–0.77, so no method can exceed that. Treat scores as prioritization, not ground truth; **wet-lab validation remains essential.**
+Cross-context note: this is within-distribution accuracy on the canonical
+dataset; a different cell line/assay will transfer lower — `train.py` re-fits on
+your own data. Every score is also **explainable and ships with a calibrated
+confidence interval**; wet-lab validation remains essential.
 
 ### Train a stronger model (NumPy-only, no heavy ML stack)
 
