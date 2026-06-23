@@ -276,6 +276,10 @@ th .arrow { opacity: 0.5; font-size: 0.7rem; }
   box-shadow: var(--shadow);
 }
 .reccard h3 { margin: 0 0 0.5rem; font-size: 1rem; letter-spacing: -0.01em; }
+.verdict { font-size: 0.9rem; font-weight: 600; padding: 0.45rem 0.7rem; border-radius: var(--radius-sm); margin: 0 0 0.7rem; }
+.verdict.good { background: var(--good-bg); color: var(--good); }
+.verdict.mid { background: var(--mid-bg); color: var(--mid); }
+.verdict.low { background: var(--low-bg); color: var(--low); }
 .reccard .recseq { font-family: var(--mono); font-size: 0.95rem; font-weight: 700; word-break: break-all; }
 .chips { display: flex; flex-wrap: wrap; gap: 0.45rem; margin: 0.7rem 0; }
 .chip {

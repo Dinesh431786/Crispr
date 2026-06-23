@@ -20,6 +20,25 @@ Reproduce: `python scripts/build_default_model.py --effdata crisporPaper/effData
 on synthetic exchangeable data. The quantiles are stored in
 `models/default.json` and served via `POST /api/explain`.
 
+## Self-complementarity: another measured negative result
+
+sgRNA self-folding is a reported activity determinant (Thyme 2016; Wong 2015),
+so we implemented a dependency-free Nussinov self-complementarity metric
+(`structure.py`) and **measured** whether it improves the trained model.
+
+| Dataset | base ρ (5-fold CV) | + self-complementarity | Δ |
+|---|:---:|:---:|:---:|
+| chari2015Train | 0.403 | 0.403 | −0.000 |
+| morenoMateos2015 | 0.424 | 0.424 | −0.000 |
+| xu2015TrainHl60 | 0.522 | 0.521 | −0.000 |
+| doench2016_hg19 | 0.223 | 0.223 | −0.000 |
+
+On its own it correlates only 0.019 with measured efficiency (xu2015): for 20-nt
+spacers, internal structure is too weak/rare to move the needle, and the
+positional features already capture the signal. We therefore **do not add it to
+the score** — it is surfaced only as an *informational* structural-QC flag in the
+recommendation card / `/api/explain` (clearly labelled "not part of the score").
+
 ## Genome-wide off-target: performance & a negative result
 
 The genome scanner uses a chunked, NumPy-vectorised sliding-window mismatch
