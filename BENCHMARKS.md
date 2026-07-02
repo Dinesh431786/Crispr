@@ -66,6 +66,50 @@ positional features already capture the signal. We therefore **do not add it to
 the score** — it is surfaced only as an *informational* structural-QC flag in the
 recommendation card / `/api/explain` (clearly labelled "not part of the score").
 
+## R-loop free-energy physics features: a first-principles negative result
+
+**Hypothesis (mechanism-level).** Every deployed on-target predictor uses
+sequence one-hot statistics, which memorise one assay's idiosyncrasies and
+transfer poorly (published cross-dataset r≈0.04–0.20). R-loop formation free
+energy, by contrast, is *cell-type-independent physics* — so physics features
+should generalise across contexts where statistics don't. We tested this
+directly rather than assuming it.
+
+**Method.** Computed ΔG°37 of the RNA:DNA hybrid (Sugimoto 1995 nearest-neighbour
+params, Biopython `R_DNA_NN1`) and the DNA:DNA duplex it displaces (SantaLucia,
+`DNA_NN3`): five features — hybrid ΔG, duplex ΔG, ΔΔG (R-loop driving-force
+proxy), seed-region and PAM-distal hybrid ΔG — standardised and appended to the
+391-dim featurizer. Pre-registered ship gate (decided *before* running): mean
+cross-dataset Spearman gain ≥ +0.03, ≥2/3 held-out datasets improve, none
+regress > 0.01, within-Kim CV not degraded > 0.005.
+
+**Result — 2×2 ablation (train on Kim n=11,617; transfer to 3 held-out sets):**
+
+| Arm | Kim 5-fold CV | cross-mean Spearman | Δcross vs baseline |
+|---|:---:|:---:|:---:|
+| baseline (no physics) | 0.705 | — | — |
+| + physics ΔG | 0.705 | — | **−0.000** |
+| + read-weighting | 0.705 | — | +0.000 |
+| + physics + read-weighting | 0.705 | — | +0.000 |
+
+Physics adds nothing — within-dataset *or* cross-dataset. A nonlinear check
+(gradient boosting) is identical (cross-mean 0.017 → 0.011), ruling out "it's
+just the linear model."
+
+**Why (the real reason).** The R-loop ΔG is **linearly (and non-linearly)
+redundant** with the GC-count and nearest-neighbour Tm features already in the
+model — they encode the same duplex-stability covariance. Adding an explicit ΔG
+gives the model no information it did not already have.
+
+**Decision.** Gate failed → **nothing shipped**; the experimental module was
+removed (no dead code). The honest implication: the cross-context transfer
+problem is *not* solved by bolting thermodynamic features onto a sequence model
+that already contains GC/Tm. Closing it likely needs a different mechanism —
+context-conditioned models with chromatin/expression covariates and
+transfer-learning fine-tuning (DeepCRISTL 2024), not more sequence-derived
+features. This is recorded as a rigorous null, alongside the TDA, seed-index and
+self-complementarity results above.
+
 ## Genome-wide off-target: performance & a negative result
 
 The genome scanner uses a chunked, NumPy-vectorised sliding-window mismatch
