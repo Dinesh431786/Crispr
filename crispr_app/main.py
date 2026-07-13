@@ -69,8 +69,9 @@ class DesignRequest(BaseModel):
     min_gc: int = Field(40, ge=30, le=80)
     max_gc: int = Field(70, ge=40, le=90)
     add_5prime_g: bool = False
-    goal: str = "general"   # "general" (cutting) | "knockout" (out-of-frame) | "knockin" (HDR)
-    target_pos: int | None = Field(None, ge=0)   # edit site (0-based) for knock-in ranking
+    goal: str = "general"   # general | knockout | knockin | crispri | baseedit
+    target_pos: int | None = Field(None, ge=0)   # edit site (knock-in) or TSS (CRISPRi/a)
+    editor: str = "any"     # base-edit: "ABE" | "CBE" | "any"
 
 
 class OffTargetRequest(BaseModel):
@@ -107,7 +108,7 @@ def design_guides(payload: DesignRequest):
     if not ok:
         raise HTTPException(status_code=400, detail=cleaned)
 
-    goal = payload.goal if payload.goal in ("general", "knockout", "knockin") else "general"
+    goal = payload.goal if payload.goal in ("general", "knockout", "knockin", "crispri", "baseedit") else "general"
     guides = find_gRNAs(
         cleaned,
         pam=payload.pam,
@@ -117,6 +118,7 @@ def design_guides(payload: DesignRequest):
         add_5prime_g=payload.add_5prime_g,
         goal=goal,
         target_pos=payload.target_pos,
+        editor=payload.editor if payload.editor in ("ABE", "CBE", "any") else "any",
     )
 
     top = guides.head(100).to_dict(orient="records")

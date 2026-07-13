@@ -178,6 +178,10 @@ async function renderRecommendation(g) {
     ci ? `<span class="chip">90% CI <b>${ci}</b></span>` : "",
     (g.CutDist != null && g.CutDist !== "")
       ? `<span class="chip" title="Distance from the Cas9 cut to your edit site; HDR falls off ~e-fold per 10 bp">Cut→edit <b>${g.CutDist} bp</b></span>` : "",
+    (g.TSSDist != null && g.TSSDist !== "")
+      ? `<span class="chip" title="Distance from the dCas9 binding site to the TSS">Bind→TSS <b>${g.TSSDist} bp</b></span>` : "",
+    (g.BE_targets != null && g.BE_targets !== "")
+      ? `<span class="chip" title="Base-editable positions in the 4–8 window (C=CBE, A=ABE)">Editable <b>${g.BE_targets}</b></span>` : "",
     `<span class="chip">Off-target risk <b>${lastSpec.length ? specWord(g.gRNA) : "scan ↓"}</b></span>`,
     (bd && bd.self_complementarity != null)
       ? `<span class="chip" title="Structural QC: spacer self-folding propensity. Informational — not part of the score.">Self-folding <b>${scWord(bd.self_complementarity)}</b></span>`
@@ -212,8 +216,12 @@ function buildVerdict(g) {
   // Fuse on-target efficiency + (if scanned) off-target specificity into one
   // decision-grade verdict. Honest: it's a prioritization aid, not a guarantee.
   const eff = Number(g.ConsensusScore);
-  const metric = lastGoal === "knockout" ? "frameshift (knockout) potential"
-    : lastGoal === "knockin" ? "HDR fitness (cut near edit site)" : "predicted efficiency";
+  const metric = {
+    knockout: "frameshift (knockout) potential",
+    knockin: "HDR fitness (cut near edit site)",
+    crispri: "CRISPRi/a fitness (near TSS)",
+    baseedit: "base-editability (target base in window)",
+  }[lastGoal] || "predicted efficiency";
   const spec = lastSpec.find((x) => x.gRNA === g.gRNA);
   const effHi = eff >= 0.6, effLo = eff < 0.4;
   if (!spec) {
@@ -326,7 +334,11 @@ function renderExplain(data) {
 })();
 
 $("goal").onchange = () => {
-  $("targetPosWrap").style.display = $("goal").value === "knockin" ? "" : "none";
+  const g = $("goal").value;
+  const needsPos = g === "knockin" || g === "crispri";
+  $("targetPosWrap").style.display = needsPos ? "" : "none";
+  $("editorWrap").style.display = g === "baseedit" ? "" : "none";
+  $("targetPosLabel").textContent = g === "crispri" ? "TSS position (0-based)" : "Edit site (0-based)";
 };
 
 $("exampleBtn").onclick = () => { $("dna").value = EXAMPLE_SEQ; $("background").value = EXAMPLE_SEQ; };
@@ -370,15 +382,20 @@ $("designBtn").onclick = async () => {
       max_gc: Number($("maxGc").value),
       goal: lastGoal,
     };
-    if (lastGoal === "knockin") payload.target_pos = Number($("targetPos").value);
+    if (lastGoal === "knockin" || lastGoal === "crispri") payload.target_pos = Number($("targetPos").value);
+    if (lastGoal === "baseedit") payload.editor = $("editor").value;
     const data = await postJSON("/api/design", payload);
     lastGuides = data.top_guides;
     lastSpec = [];
     sortState = { col: "ConsensusScore", dir: -1 };
     sortAndRenderGuides();
     renderRecommendation(lastGuides[0]);
-    const goalLbl = data.goal === "knockout" ? "predicted frameshift (knockout)"
-      : data.goal === "knockin" ? "HDR fitness (cutting × proximity to edit site)" : "cutting efficiency";
+    const goalLbl = {
+      knockout: "predicted frameshift (knockout)",
+      knockin: "HDR fitness (cutting × proximity to edit site)",
+      crispri: "CRISPRi/a fitness (activity × proximity to TSS)",
+      baseedit: "base-editability (target base in window × activity)",
+    }[data.goal] || "cutting efficiency";
     setStatus($("guideSummary"), `Designed ${data.count} candidate guides — ranked by ${goalLbl}, showing top ${Math.min(lastGuides.length, 100)}.`);
     $("exportGuidesBtn").disabled = !lastGuides.length;
     $("offBtn").disabled = !lastGuides.length;

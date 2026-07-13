@@ -32,6 +32,7 @@ try:  # Works both as top-level modules (uvicorn main:app) and as a package (tes
     from scoring import on_target_score
     from models import predict_on_target
     from crisprscan import score_from_context as crisprscan_context
+    from base_edit import editable_targets
 except ImportError:  # pragma: no cover - import-context fallback
     from .offtarget import (
         CFD_SCORES,
@@ -45,6 +46,7 @@ except ImportError:  # pragma: no cover - import-context fallback
     from .scoring import on_target_score
     from .models import predict_on_target
     from .crisprscan import score_from_context as crisprscan_context
+    from .base_edit import editable_targets
 
 __all__ = [
     "ScoringConfig",
@@ -126,6 +128,26 @@ def _pam_len(pam: str) -> int:
     return 2 if pam == "NG" else (4 if pam == "TTTV" else 3)
 
 
+def _rank_by(df: pd.DataFrame, fitness) -> pd.DataFrame:
+    """Sort by a goal-specific fitness vector without altering displayed scores."""
+    return df.assign(_fit=np.asarray(fitness)).sort_values("_fit", ascending=False) \
+             .drop(columns="_fit").reset_index(drop=True)
+
+
+def _base_edit_factor(guide: str, editor: str = "any") -> tuple[float, str]:
+    """(centrality factor in [0,1], 'C5,A7' tag) for base-editable targets in the
+    activity window. 0 when the guide has no editable base for the chosen editor."""
+    targets = editable_targets(guide)
+    if editor in ("ABE", "CBE"):
+        targets = [t for t in targets if t["editor"] == editor]
+    if not targets:
+        return 0.0, ""
+    # Editing efficiency peaks near window position ~6; weight by centrality.
+    factor = max(np.exp(-((t["pos"] - 6) / 2.0) ** 2) for t in targets)
+    tag = ",".join(f"{t['editor'][0]}{t['pos']}" for t in targets)
+    return round(float(factor), 3), tag
+
+
 def find_gRNAs(
     dna_seq: str,
     pam: str = "NGG",
@@ -135,6 +157,7 @@ def find_gRNAs(
     add_5prime_g: bool = False,
     goal: str = "general",
     target_pos: int | None = None,
+    editor: str = "any",
 ) -> pd.DataFrame:
     sequence = dna_seq.upper().replace("\n", "").replace(" ", "")
     pam_len = _pam_len(pam)
@@ -204,9 +227,28 @@ def find_gRNAs(
     if goal == "knockin" and target_pos is not None:
         cut = np.where(df["Strand"] == "+", df["Start"] + guide_length - 3, df["Start"] + 3)
         df["CutDist"] = np.abs(cut - int(target_pos)).astype(int)
-        hdr_fitness = df["ConsensusScore"] * np.exp(-df["CutDist"] / 10.0)
-        return df.assign(_hdr=hdr_fitness).sort_values("_hdr", ascending=False) \
-                 .drop(columns="_hdr").reset_index(drop=True)
+        fitness = df["ConsensusScore"] * np.exp(-df["CutDist"] / 10.0)
+        return _rank_by(df, fitness)
+
+    # CRISPRi/a: dCas9 binds (does not cut) near the TSS; the effective window is
+    # broad (~hundreds of bp), so rank by binding-site proximity with a wide decay.
+    if goal == "crispri" and target_pos is not None:
+        mid = df["Start"] + guide_length // 2
+        df["TSSDist"] = np.abs(mid - int(target_pos)).astype(int)
+        fitness = df["ConsensusScore"] * np.exp(-df["TSSDist"] / 75.0)
+        return _rank_by(df, fitness)
+
+    # Base editing: only guides with a target base (C for CBE, A for ABE) inside
+    # the activity window are usable; rank by on-target x window-centrality (peak
+    # ~position 6). Guides with no editable base sink to the bottom.
+    if goal == "baseedit":
+        facs, tags = [], []
+        for g in df["gRNA"]:
+            fac, tag = _base_edit_factor(g, editor)
+            facs.append(fac); tags.append(tag)
+        df["BE_targets"] = tags
+        fitness = df["ConsensusScore"] * np.array(facs)
+        return _rank_by(df, fitness)
 
     return df.sort_values("ConsensusScore", ascending=False).reset_index(drop=True)
 

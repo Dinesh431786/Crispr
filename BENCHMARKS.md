@@ -57,8 +57,19 @@ per ~10 bp of cut-to-edit-site distance (Paquet et al. 2016), so guides are
 ranked by `cutting_score × exp(−CutDist/10)` while the displayed score stays the
 interpretable cutting efficiency and `CutDist` is shown separately. For an edit
 at position 110 the top guides cut 1–7 bp away — surfacing guides that cut *near
-the edit and* cut well, which a generic ranking misses. Same pattern extends to
-base-edit (target base in window) and CRISPRi/a (TSS proximity).
+the edit and* cut well, which a generic ranking misses. The same pattern now covers five modes:
+
+| Mode | Kind | Ranking objective |
+|---|---|---|
+| General | model | cutting efficiency (ρ=0.707) |
+| Knockout | model | out-of-frame / frameshift (ρ=0.667) |
+| Knock-in (HDR) | objective | cutting × exp(−cut-to-edit / 10 bp) |
+| CRISPRi/a | objective | activity × exp(−bind-to-TSS / 75 bp), wide window (dCas9 doesn't cut) |
+| Base editing | constraint | activity × window-centrality, **only** guides with a C (CBE) / A (ABE) in positions 4–8 |
+
+Two are *different models* (a swapped predictor), two are *different objectives*
+(re-weighting), one is a *hard constraint* (base editability) — three distinct
+kinds of "aware-from-the-start", each measured and honestly scoped.
 
 ## Calibrated uncertainty (conformal) — verified coverage
 

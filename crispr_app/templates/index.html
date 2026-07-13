@@ -62,10 +62,19 @@
               <option value="general">General — cutting efficiency</option>
               <option value="knockout">Knockout — frameshift (out-of-frame)</option>
               <option value="knockin">Knock-in (HDR) — cut near edit site</option>
+              <option value="crispri">CRISPRi / CRISPRa — near TSS</option>
+              <option value="baseedit">Base editing — ABE/CBE window</option>
             </select>
           </label>
-          <label id="targetPosWrap" style="display:none">Edit site (0-based)
+          <label id="targetPosWrap" style="display:none"><span id="targetPosLabel">Edit site (0-based)</span>
             <input type="number" id="targetPos" value="40" min="0" />
+          </label>
+          <label id="editorWrap" style="display:none">Base editor
+            <select id="editor">
+              <option value="any">ABE or CBE</option>
+              <option value="CBE">CBE (C→T)</option>
+              <option value="ABE">ABE (A→G)</option>
+            </select>
           </label>
           <label>PAM / enzyme
             <select id="pam">
