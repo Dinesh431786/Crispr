@@ -69,7 +69,8 @@ class DesignRequest(BaseModel):
     min_gc: int = Field(40, ge=30, le=80)
     max_gc: int = Field(70, ge=40, le=90)
     add_5prime_g: bool = False
-    goal: str = "general"   # "general" (cutting) | "knockout" (out-of-frame)
+    goal: str = "general"   # "general" (cutting) | "knockout" (out-of-frame) | "knockin" (HDR)
+    target_pos: int | None = Field(None, ge=0)   # edit site (0-based) for knock-in ranking
 
 
 class OffTargetRequest(BaseModel):
@@ -106,7 +107,7 @@ def design_guides(payload: DesignRequest):
     if not ok:
         raise HTTPException(status_code=400, detail=cleaned)
 
-    goal = payload.goal if payload.goal in ("general", "knockout") else "general"
+    goal = payload.goal if payload.goal in ("general", "knockout", "knockin") else "general"
     guides = find_gRNAs(
         cleaned,
         pam=payload.pam,
@@ -115,12 +116,15 @@ def design_guides(payload: DesignRequest):
         max_gc=payload.max_gc,
         add_5prime_g=payload.add_5prime_g,
         goal=goal,
+        target_pos=payload.target_pos,
     )
 
     top = guides.head(100).to_dict(orient="records")
     # Attach the goal-appropriate calibrated confidence interval (0-100) per guide.
+    # Knock-in uses the cutting model (HDR still needs a cut); knockout uses OOF.
+    ci_goal = "knockout" if goal == "knockout" else "general"
     for g in top:
-        ci = predict_interval(g["gRNA"], goal=goal)
+        ci = predict_interval(g["gRNA"], goal=ci_goal)
         if ci is not None:
             g["CI_low"] = round(ci["low"] * 100)
             g["CI_high"] = round(ci["high"] * 100)

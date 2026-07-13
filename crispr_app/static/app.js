@@ -176,6 +176,8 @@ async function renderRecommendation(g) {
     `<span class="chip">GC <b>${g["GC%"]}%</b></span>`,
     cscan != null ? `<span class="chip">CRISPRscan <b>${cscan}</b></span>` : "",
     ci ? `<span class="chip">90% CI <b>${ci}</b></span>` : "",
+    (g.CutDist != null && g.CutDist !== "")
+      ? `<span class="chip" title="Distance from the Cas9 cut to your edit site; HDR falls off ~e-fold per 10 bp">Cut→edit <b>${g.CutDist} bp</b></span>` : "",
     `<span class="chip">Off-target risk <b>${lastSpec.length ? specWord(g.gRNA) : "scan ↓"}</b></span>`,
     (bd && bd.self_complementarity != null)
       ? `<span class="chip" title="Structural QC: spacer self-folding propensity. Informational — not part of the score.">Self-folding <b>${scWord(bd.self_complementarity)}</b></span>`
@@ -210,7 +212,8 @@ function buildVerdict(g) {
   // Fuse on-target efficiency + (if scanned) off-target specificity into one
   // decision-grade verdict. Honest: it's a prioritization aid, not a guarantee.
   const eff = Number(g.ConsensusScore);
-  const metric = lastGoal === "knockout" ? "frameshift (knockout) potential" : "predicted efficiency";
+  const metric = lastGoal === "knockout" ? "frameshift (knockout) potential"
+    : lastGoal === "knockin" ? "HDR fitness (cut near edit site)" : "predicted efficiency";
   const spec = lastSpec.find((x) => x.gRNA === g.gRNA);
   const effHi = eff >= 0.6, effLo = eff < 0.4;
   if (!spec) {
@@ -322,6 +325,10 @@ function renderExplain(data) {
   } catch (_) { $("modelTag").textContent = "on-target model: built-in"; }
 })();
 
+$("goal").onchange = () => {
+  $("targetPosWrap").style.display = $("goal").value === "knockin" ? "" : "none";
+};
+
 $("exampleBtn").onclick = () => { $("dna").value = EXAMPLE_SEQ; $("background").value = EXAMPLE_SEQ; };
 $("clearBtn").onclick = () => { $("dna").value = ""; };
 
@@ -355,20 +362,23 @@ $("designBtn").onclick = async () => {
   busy(btn, true, "Designing…");
   try {
     lastGoal = $("goal").value;
-    const data = await postJSON("/api/design", {
+    const payload = {
       dna_sequence: $("dna").value,
       pam: $("pam").value,
       guide_length: Number($("guideLength").value),
       min_gc: Number($("minGc").value),
       max_gc: Number($("maxGc").value),
       goal: lastGoal,
-    });
+    };
+    if (lastGoal === "knockin") payload.target_pos = Number($("targetPos").value);
+    const data = await postJSON("/api/design", payload);
     lastGuides = data.top_guides;
     lastSpec = [];
     sortState = { col: "ConsensusScore", dir: -1 };
     sortAndRenderGuides();
     renderRecommendation(lastGuides[0]);
-    const goalLbl = data.goal === "knockout" ? "predicted frameshift (knockout)" : "cutting efficiency";
+    const goalLbl = data.goal === "knockout" ? "predicted frameshift (knockout)"
+      : data.goal === "knockin" ? "HDR fitness (cutting × proximity to edit site)" : "cutting efficiency";
     setStatus($("guideSummary"), `Designed ${data.count} candidate guides — ranked by ${goalLbl}, showing top ${Math.min(lastGuides.length, 100)}.`);
     $("exportGuidesBtn").disabled = !lastGuides.length;
     $("offBtn").disabled = !lastGuides.length;

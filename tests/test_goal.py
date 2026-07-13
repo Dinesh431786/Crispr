@@ -36,3 +36,16 @@ def test_find_grnas_goal_reorders():
     # OnTargetScore comes from a different model, so at least some scores differ.
     assert list(gen["OnTargetScore"]) != list(ko["OnTargetScore"])
     models.reset_caches()
+
+
+def test_knockin_ranks_by_proximity():
+    # Knock-in mode adds CutDist and ranks by cutting x proximity to the edit site.
+    df = find_gRNAs(SEQ, pam="NGG", goal="knockin", target_pos=60)
+    assert not df.empty and "CutDist" in df.columns
+    # Top-ranked guides cluster nearer the edit site than the overall average.
+    assert df.head(3)["CutDist"].mean() < df["CutDist"].mean()
+    # Displayed score stays the interpretable cutting score (0-1), not crushed.
+    assert 0.0 <= df.iloc[0]["ConsensusScore"] <= 1.0
+    # A different target site re-ranks to a different #1 guide.
+    df2 = find_gRNAs(SEQ, pam="NGG", goal="knockin", target_pos=180)
+    assert df.iloc[0]["gRNA"] != df2.iloc[0]["gRNA"]

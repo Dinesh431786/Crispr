@@ -61,7 +61,11 @@
             <select id="goal">
               <option value="general">General — cutting efficiency</option>
               <option value="knockout">Knockout — frameshift (out-of-frame)</option>
+              <option value="knockin">Knock-in (HDR) — cut near edit site</option>
             </select>
+          </label>
+          <label id="targetPosWrap" style="display:none">Edit site (0-based)
+            <input type="number" id="targetPos" value="40" min="0" />
           </label>
           <label>PAM / enzyme
             <select id="pam">

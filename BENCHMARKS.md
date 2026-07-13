@@ -49,8 +49,16 @@ real: ranking by knockout vs cutting **reorders ~20% of the top-100 guides**, an
 **~13% of the top-100 cutting guides are *not* in the top-30% for frameshift**
 (i.e. mis-ranked for a KO). A second NumPy-ridge model (`models/default_oof.json`,
 same featurizer, conformal-calibrated) ships and is selected by the design
-`goal` parameter / UI selector. Same idea extends to knock-in (cut-to-edit-site
-distance), base-edit (target base in window), and CRISPRi/a (TSS proximity).
+`goal` parameter / UI selector.
+
+**Knock-in (HDR) mode** demonstrates the *second* kind of goal-awareness — a
+different *objective*, not a different model. HDR efficiency falls off ~e-fold
+per ~10 bp of cut-to-edit-site distance (Paquet et al. 2016), so guides are
+ranked by `cutting_score × exp(−CutDist/10)` while the displayed score stays the
+interpretable cutting efficiency and `CutDist` is shown separately. For an edit
+at position 110 the top guides cut 1–7 bp away — surfacing guides that cut *near
+the edit and* cut well, which a generic ranking misses. Same pattern extends to
+base-edit (target base in window) and CRISPRi/a (TSS proximity).
 
 ## Calibrated uncertainty (conformal) — verified coverage
 

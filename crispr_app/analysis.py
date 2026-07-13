@@ -134,6 +134,7 @@ def find_gRNAs(
     max_gc: int = 70,
     add_5prime_g: bool = False,
     goal: str = "general",
+    target_pos: int | None = None,
 ) -> pd.DataFrame:
     sequence = dna_seq.upper().replace("\n", "").replace(" ", "")
     pam_len = _pam_len(pam)
@@ -193,7 +194,21 @@ def find_gRNAs(
     cols = ["Strand", "Start", "gRNA", "PAM", "GC%", "HybridScore", "MLScore", "OnTargetScore", "CRISPRScanScore", "ConsensusScore"]
     if not guides:
         return pd.DataFrame(columns=cols)
-    return pd.DataFrame(guides).sort_values("ConsensusScore", ascending=False).reset_index(drop=True)
+    df = pd.DataFrame(guides)
+
+    # Knock-in (HDR) mode: HDR efficiency falls off sharply with the distance
+    # between the Cas9 cut and the intended edit site (~e-fold per ~10 bp), so
+    # rank by cutting score weighted by proximity to target_pos. The displayed
+    # ConsensusScore stays the (interpretable) cutting score; CutDist is exposed
+    # separately. The cut is ~3 bp inside the protospacer from the PAM-proximal end.
+    if goal == "knockin" and target_pos is not None:
+        cut = np.where(df["Strand"] == "+", df["Start"] + guide_length - 3, df["Start"] + 3)
+        df["CutDist"] = np.abs(cut - int(target_pos)).astype(int)
+        hdr_fitness = df["ConsensusScore"] * np.exp(-df["CutDist"] / 10.0)
+        return df.assign(_hdr=hdr_fitness).sort_values("_hdr", ascending=False) \
+                 .drop(columns="_hdr").reset_index(drop=True)
+
+    return df.sort_values("ConsensusScore", ascending=False).reset_index(drop=True)
 
 
 def count_mismatches(a: str, b: str) -> int:
