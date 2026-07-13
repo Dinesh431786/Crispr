@@ -145,28 +145,32 @@ guaranteed uncertainty.
 
 ---
 
-## 📊 Accuracy — measured, not asserted
+## 📊 Accuracy — measured vs the field (not asserted)
 
-Held-out Spearman ρ, **5-fold cross-validated on the large, clean CRISPRon/Kim
-indel-efficiency dataset (11,617 guides)** — full tables/method in **[BENCHMARKS.md](BENCHMARKS.md)**:
+**Head-to-head on identical guides** (Spearman ρ; competitor scores read verbatim
+from CRISPOR; all datasets held out for our Kim-trained model):
 
-| Configuration | ρ | Notes |
-|---|:---:|---|
-| **Shipped default** — NumPy ridge | **0.707** | trained on 11.6k guides, **zero setup**, no heavy deps |
-| Optional gradient boosting | **0.737** | edges DeepSpCas9 (~0.73) |
-| Built-in heuristic | ~0.25 | interpretable fallback |
-| CRISPRscan (peer-reviewed) | 0.58 | reproduced weights, on its home dataset |
+| Tool | doench2016 | chari2015 | morenoMateos | **mean** |
+|---|:---:|:---:|:---:|:---:|
+| **OURS (NumPy ridge)** | 0.245 | 0.412 | 0.166 | **0.274** |
+| CRISPRscan | 0.108 | 0.123 | 0.579 | 0.270 |
+| Azimuth / Rule Set 2 | 0.269 | 0.381 | 0.120 | 0.257 |
+| Wang SVM · Chari · SSC · WU-CRISPR | — | — | — | 0.15–0.24 |
 
-> 🎯 **This is wet-lab-grade.** Wet-lab replicates of the *same* guide agree only
-> at **ρ≈0.71–0.77** — a hard ceiling for *any* predictor. At **ρ=0.71 (ridge) /
-> 0.74 (GBM)** the model agrees with the measured efficiency **about as well as
-> the assay agrees with itself.** We don't claim to beat the wet lab — we *match
-> its reproducibility*, honestly and reproducibly, with a NumPy-only model.
+On truly held-out data our lightweight model has the **highest mean ρ**, matching
+CRISPRscan and edging Azimuth. Full table + reproduce command in **[BENCHMARKS.md](BENCHMARKS.md)**.
 
-Cross-context note: this is within-distribution accuracy on the canonical
-dataset; a different cell line/assay will transfer lower — `train.py` re-fits on
-your own data. Every score is also **explainable and ships with a calibrated
-confidence interval**; wet-lab validation remains essential.
+**Within a single clean dataset** (CRISPRon/Kim, 11,617 guides, 5-fold CV):
+ridge **ρ=0.707**, gradient boosting **0.737**.
+
+> 🎯 **Wet-lab-grade.** Wet-lab replicates of the *same* guide agree only at
+> **ρ≈0.71–0.77** — a hard ceiling for *any* predictor. At **0.71–0.74** the model
+> agrees with the measurement **about as well as the assay agrees with itself.**
+> We don't claim to beat the wet lab; we *match its reproducibility* — NumPy-only,
+> zero setup. Cross-dataset ρ is low (~0.15–0.4) for *every* tool, giants included.
+
+Every score is also **explainable and ships with a calibrated confidence
+interval**; wet-lab validation remains essential.
 
 ### Train a stronger model (NumPy-only, no heavy ML stack)
 
