@@ -40,6 +40,15 @@ COMPETITORS = {
 }
 
 
+def _flanks(guide: str, long_seq: str) -> tuple[str, str]:
+    """6 nt upstream, 9 nt (PAM+6) downstream around the protospacer, if locatable."""
+    s = (long_seq or "").upper()
+    j = s.find(guide)
+    if j >= 6 and j + 20 + 9 <= len(s):
+        return s[j - 6:j], s[j + 20:j + 29]
+    return "", ""
+
+
 def load(path: str):
     rows = []
     with open(path) as fh:
@@ -51,13 +60,14 @@ def load(path: str):
                 y = float(r["modFreq"])
             except (KeyError, ValueError):
                 continue
-            rows.append((g, y, r))
+            up, down = _flanks(g, r.get("longSeq100Bp", ""))
+            rows.append((g, y, r, up, down))
     return rows
 
 
 def col_rho(rows, col):
     xs, ys = [], []
-    for g, y, r in rows:
+    for g, y, r, up, down in rows:
         try:
             xs.append(float(r.get(col, ""))); ys.append(y)
         except ValueError:
@@ -78,8 +88,9 @@ def main() -> None:
         per = [fn(data[n]) for n in DATASETS]
         print(f"{name:<24}" + "".join(f"{v:>12.3f}" for v in per) + f"{np.nanmean(per):>12.3f}")
 
-    row("OURS (shipped)", lambda rows: spearman([predict_on_target(g) for g, _, _ in rows],
-                                                [y for _, y, _ in rows]))
+    row("OURS (shipped)", lambda rows: spearman(
+        [predict_on_target(g, up=up, down=down) for g, _, _, up, down in rows],
+        [y for _, y, _, _, _ in rows]))
     for col, disp in COMPETITORS.items():
         row(disp, lambda rows, c=col: col_rho(rows, c))
 

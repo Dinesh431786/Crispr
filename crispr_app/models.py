@@ -54,8 +54,9 @@ class LinearModel:
         self.intercept = float(intercept)
         self.meta = meta or {}
 
-    def predict(self, guide: str, ngg_context: str | None = None) -> float:
-        x = featurize(guide, ngg_context)
+    def predict(self, guide: str, ngg_context: str | None = None,
+                up: str = "", down: str = "") -> float:
+        x = featurize(guide, ngg_context, up, down)
         if x.shape[0] != self.weights.shape[0]:
             raise ValueError("feature/weight dimension mismatch")
         y = float(x @ self.weights + self.intercept)
@@ -149,14 +150,15 @@ def active_backend(backend: str = "auto") -> str:
 
 
 def predict_on_target(guide: str, ngg_context: str | None = None, backend: str = "auto",
-                      goal: str = "general") -> float:
+                      goal: str = "general", up: str = "", down: str = "") -> float:
     """On-target score. ``goal='knockout'`` uses the out-of-frame model (rank by
-    predicted frameshift) when available; otherwise the general cutting model."""
+    predicted frameshift) when available; otherwise the general cutting model.
+    ``up``/``down`` are the flanking sequence context (6 nt 5', PAM+6 nt 3')."""
     if goal == "knockout":
         m = _load_oof()
         if m is not None:
             try:
-                return m.predict(guide, ngg_context)
+                return m.predict(guide, ngg_context, up, down)
             except Exception:
                 pass
     chosen = active_backend(backend)
@@ -164,7 +166,7 @@ def predict_on_target(guide: str, ngg_context: str | None = None, backend: str =
         sess = _load_onnx()
         if sess is not None:
             try:
-                x = featurize(guide, ngg_context).astype(np.float32)[None, :]
+                x = featurize(guide, ngg_context, up, down).astype(np.float32)[None, :]
                 out = sess.run(None, {sess.get_inputs()[0].name: x})[0]
                 return round(float(np.clip(np.ravel(out)[0], 0.0, 1.0)), 3)
             except Exception:
@@ -173,14 +175,14 @@ def predict_on_target(guide: str, ngg_context: str | None = None, backend: str =
         lm = _load_linear()
         if lm is not None:
             try:
-                return lm.predict(guide, ngg_context)
+                return lm.predict(guide, ngg_context, up, down)
             except Exception:
                 pass
     return on_target_score(guide, ngg_context)
 
 
 def predict_interval(guide: str, ngg_context: str | None = None, level: str = "q90",
-                     goal: str = "general") -> dict | None:
+                     goal: str = "general", up: str = "", down: str = "") -> dict | None:
     """Conformal prediction interval for the (goal-appropriate) on-target model.
 
     Returns {"point", "low", "high", "level", "coverage"} on the 0-1 scale, or
@@ -192,7 +194,7 @@ def predict_interval(guide: str, ngg_context: str | None = None, level: str = "q
     conf = (lm.meta or {}).get("conformal") or {}
     if level not in conf:
         return None
-    point = lm.predict(guide, ngg_context)
+    point = lm.predict(guide, ngg_context, up, down)
     lo, hi = _conf_interval(point, float(conf[level]))
     return {"point": point, "low": lo, "high": hi, "level": level,
             "coverage": int(level[1:]) / 100.0}

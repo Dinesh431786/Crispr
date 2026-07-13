@@ -30,7 +30,7 @@ try:  # Works both as top-level modules (uvicorn main:app) and as a package (tes
     from prime import design_prime_editing_pegRNAs
     from scoring import gc_fraction as _gc_fraction
     from scoring import on_target_score
-    from models import predict_on_target
+    from models import predict_on_target, predict_interval
     from crisprscan import score_from_context as crisprscan_context
     from base_edit import editable_targets
 except ImportError:  # pragma: no cover - import-context fallback
@@ -44,7 +44,7 @@ except ImportError:  # pragma: no cover - import-context fallback
     from .prime import design_prime_editing_pegRNAs
     from .scoring import gc_fraction as _gc_fraction
     from .scoring import on_target_score
-    from .models import predict_on_target
+    from .models import predict_on_target, predict_interval
     from .crisprscan import score_from_context as crisprscan_context
     from .base_edit import editable_targets
 
@@ -171,7 +171,13 @@ def find_gRNAs(
         gc = _gc_fraction(guide) * 100
         if min_gc <= gc <= max_gc and "TTTT" not in guide:
             g_out = guide if not add_5prime_g or guide.startswith("G") else f"G{guide[:-1]}"
-            on = predict_on_target(g_out, ngg_ctx, goal=goal)
+            # Flanking context (6 nt 5', PAM+6 nt 3') — 3'-PAM enzymes only.
+            if is_5prime_pam:
+                up = down = ""
+            else:
+                up = local_seq[max(0, local_i - 6):local_i]
+                down = local_seq[local_i + guide_length:local_i + guide_length + 9]
+            on = predict_on_target(g_out, ngg_ctx, goal=goal, up=up, down=down)
             hy = hybrid_score(g_out)
             cs = crisprscan_context(local_seq, local_i, guide_length) if use_crisprscan else None
             # Consensus: blend the surrogate/learned score with the peer-reviewed
@@ -180,7 +186,7 @@ def find_gRNAs(
                 consensus = round(0.25 * hy + 0.35 * on + 0.40 * cs, 3)
             else:
                 consensus = round(0.35 * hy + 0.65 * on, 3)
-            guides.append({
+            row = {
                 "Strand": strand,
                 "Start": start,
                 "gRNA": g_out,
@@ -191,7 +197,16 @@ def find_gRNAs(
                 "OnTargetScore": on,
                 "CRISPRScanScore": cs if cs is not None else "",
                 "ConsensusScore": consensus,
-            })
+            }
+            # Calibrated interval from the goal-appropriate model, using the same
+            # flanking context as the score (knockout -> OOF model, else cutting).
+            ci = predict_interval(g_out, ngg_ctx, goal=("knockout" if goal == "knockout" else "general"),
+                                  up=up, down=down)
+            if ci is not None:
+                row["CI_low"] = round(ci["low"] * 100)
+                row["CI_high"] = round(ci["high"] * 100)
+                row["CI_level"] = int(ci["coverage"] * 100)
+            guides.append(row)
 
     def _scan(seq: str, strand: str) -> None:
         n = len(seq)
