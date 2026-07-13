@@ -133,6 +133,7 @@ def find_gRNAs(
     min_gc: int = 40,
     max_gc: int = 70,
     add_5prime_g: bool = False,
+    goal: str = "general",
 ) -> pd.DataFrame:
     sequence = dna_seq.upper().replace("\n", "").replace(" ", "")
     pam_len = _pam_len(pam)
@@ -146,7 +147,7 @@ def find_gRNAs(
         gc = _gc_fraction(guide) * 100
         if min_gc <= gc <= max_gc and "TTTT" not in guide:
             g_out = guide if not add_5prime_g or guide.startswith("G") else f"G{guide[:-1]}"
-            on = predict_on_target(g_out, ngg_ctx)
+            on = predict_on_target(g_out, ngg_ctx, goal=goal)
             hy = hybrid_score(g_out)
             cs = crisprscan_context(local_seq, local_i, guide_length) if use_crisprscan else None
             # Consensus: blend the surrogate/learned score with the peer-reviewed

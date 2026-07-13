@@ -30,6 +30,28 @@ This is within-distribution accuracy; a different cell line/assay transfers lowe
 (`train.py` re-fits on your data). We do not claim to beat the wet lab — we match
 its reproducibility, honestly and reproducibly.
 
+## Goal-aware "knockout mode" (a positive result)
+
+Borrowing the *synthesis-aware / ADMET-aware* logic from molecule generation:
+bake the actual objective into ranking instead of ranking a generic proxy. For a
+**knockout**, success is *frameshift* (out-of-frame repair), not total cutting —
+a guide that cuts efficiently but yields mostly in-frame indels is a poor KO
+guide. The CRISPRon/Kim data has an `out_of_frame efficiency` label we now use.
+
+| Model target | 5-fold CV Spearman |
+|---|:---:|
+| total cutting (`total_indel_eff`) — general mode | 0.707 |
+| **out-of-frame (`out_of_frame efficiency`) — knockout mode** | **0.667** |
+
+The two labels correlate 0.937 (frameshift is largely driven by cutting), so this
+is a *correctness* gain, not a big accuracy jump — stated honestly. But it is
+real: ranking by knockout vs cutting **reorders ~20% of the top-100 guides**, and
+**~13% of the top-100 cutting guides are *not* in the top-30% for frameshift**
+(i.e. mis-ranked for a KO). A second NumPy-ridge model (`models/default_oof.json`,
+same featurizer, conformal-calibrated) ships and is selected by the design
+`goal` parameter / UI selector. Same idea extends to knock-in (cut-to-edit-site
+distance), base-edit (target base in window), and CRISPRi/a (TSS proximity).
+
 ## Calibrated uncertainty (conformal) — verified coverage
 
 Point scores are overconfident, so we ship **split-conformal** prediction

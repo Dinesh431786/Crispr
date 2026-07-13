@@ -33,12 +33,15 @@ from features import featurize_many  # noqa: E402
 from train import fit_ridge  # noqa: E402
 
 
-def load(path: str):
+TARGET_COLUMN = {"cutting": "total_indel_eff", "oof": "out_of_frame efficiency"}
+
+
+def load(path: str, column: str = "total_indel_eff"):
     guides, y = [], []
     with open(path) as fh:
         reader = csv.reader(fh, delimiter="\t")
         header = next(reader)
-        gi, ei = header.index("gRNA"), header.index("total_indel_eff")
+        gi, ei = header.index("gRNA"), header.index(column)
         for row in reader:
             if len(row) <= max(gi, ei):
                 continue
@@ -56,11 +59,19 @@ def load(path: str):
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", required=True, help="path to CRISPROn seq_efficienciey.txt")
-    ap.add_argument("--out", default=str(Path(__file__).resolve().parent.parent / "crispr_app" / "models" / "default.json"))
+    ap.add_argument("--target", choices=["cutting", "oof"], default="cutting",
+                    help="cutting = total_indel_eff (general/default.json); "
+                         "oof = out_of_frame efficiency (knockout mode / default_oof.json)")
+    ap.add_argument("--out", default=None)
     ap.add_argument("--alpha", type=float, default=10.0)
     args = ap.parse_args()
 
-    guides, y = load(args.data)
+    column = TARGET_COLUMN[args.target]
+    if args.out is None:
+        fname = "default.json" if args.target == "cutting" else "default_oof.json"
+        args.out = str(Path(__file__).resolve().parent.parent / "crispr_app" / "models" / fname)
+
+    guides, y = load(args.data, column)
     X = featurize_many(guides)
     print(f"N = {len(guides)} guides")
 
@@ -89,8 +100,8 @@ def main() -> None:
 
     final = fit_ridge(X, y, args.alpha)
     final.meta.update({"trained_on": f"CRISPROn/Kim seq_efficiency (n={len(guides)})",
-                       "target": "total_indel_eff/100", "cv_spearman": round(rho, 3),
-                       "alpha": args.alpha, "conformal": conf})
+                       "target": f"{column}/100", "goal": args.target,
+                       "cv_spearman": round(rho, 3), "alpha": args.alpha, "conformal": conf})
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     final.save(args.out)
     print(f"saved {args.out}")

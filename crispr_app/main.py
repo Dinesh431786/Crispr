@@ -29,7 +29,7 @@ from utils import load_fasta_text, validate_sequence
 BASE_DIR = Path(__file__).resolve().parent
 MAX_SEQ = 200_000  # input guard: max DNA characters accepted by JSON endpoints
 
-app = FastAPI(title="CRISPR Precision Studio", version="3.2.0")
+app = FastAPI(title="CRISPR Precision Studio", version="3.3.0")
 
 # CORS: configurable for deployment. Default "*" (open) but WITHOUT credentials,
 # which is the only spec-valid combination; set CRISPR_CORS_ORIGINS to a
@@ -69,6 +69,7 @@ class DesignRequest(BaseModel):
     min_gc: int = Field(40, ge=30, le=80)
     max_gc: int = Field(70, ge=40, le=90)
     add_5prime_g: bool = False
+    goal: str = "general"   # "general" (cutting) | "knockout" (out-of-frame)
 
 
 class OffTargetRequest(BaseModel):
@@ -105,6 +106,7 @@ def design_guides(payload: DesignRequest):
     if not ok:
         raise HTTPException(status_code=400, detail=cleaned)
 
+    goal = payload.goal if payload.goal in ("general", "knockout") else "general"
     guides = find_gRNAs(
         cleaned,
         pam=payload.pam,
@@ -112,12 +114,13 @@ def design_guides(payload: DesignRequest):
         min_gc=payload.min_gc,
         max_gc=payload.max_gc,
         add_5prime_g=payload.add_5prime_g,
+        goal=goal,
     )
 
     top = guides.head(100).to_dict(orient="records")
-    # Attach the calibrated on-target confidence interval (0-100) to each guide.
+    # Attach the goal-appropriate calibrated confidence interval (0-100) per guide.
     for g in top:
-        ci = predict_interval(g["gRNA"])
+        ci = predict_interval(g["gRNA"], goal=goal)
         if ci is not None:
             g["CI_low"] = round(ci["low"] * 100)
             g["CI_high"] = round(ci["high"] * 100)
@@ -125,6 +128,7 @@ def design_guides(payload: DesignRequest):
     return {
         "count": int(len(guides)),
         "model": active_backend(),
+        "goal": goal,
         "top_guides": top,
     }
 
@@ -183,6 +187,7 @@ def prime_design(payload: PrimeDesignRequest):
 class ExplainRequest(BaseModel):
     guide: str = Field(..., min_length=18)
     ngg_context: str | None = None
+    goal: str = "general"
 
 
 class FastaRequest(BaseModel):
@@ -200,7 +205,8 @@ class GenomeOffTargetRequest(BaseModel):
 def explain(payload: ExplainRequest):
     """Interpretable breakdown of an on-target score plus a conformal interval."""
     out = score_breakdown(payload.guide, payload.ngg_context)
-    ci = predict_interval(payload.guide, payload.ngg_context)
+    goal = payload.goal if payload.goal in ("general", "knockout") else "general"
+    ci = predict_interval(payload.guide, payload.ngg_context, goal=goal)
     if ci is not None:
         out["interval"] = ci  # distribution-free CI with guaranteed coverage
     # Informational structural QC (NOT part of the score: in our benchmarks it
