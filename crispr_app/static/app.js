@@ -11,6 +11,7 @@ let lastGuides = [];
 let lastOff = [];
 let lastSpec = [];
 let lastPeg = [];
+let lastGoal = "general";
 
 /* ---------- helpers ---------- */
 
@@ -163,14 +164,15 @@ async function renderRecommendation(g) {
   const el = $("recCard");
   if (!g) { el.hidden = true; return; }
   let bd = null;
-  try { bd = await postJSON("/api/explain", { guide: g.gRNA }); } catch (_) {}
+  try { bd = await postJSON("/api/explain", { guide: g.gRNA, goal: lastGoal }); } catch (_) {}
   const pct = (v) => Math.round(Number(v) * 100);
   const eff = pct(g.OnTargetScore != null ? g.OnTargetScore : g.MLScore);
+  const effLabel = lastGoal === "knockout" ? "Predicted frameshift" : "On-target efficiency";
   const cscan = typeof g.CRISPRScanScore === "number" ? pct(g.CRISPRScanScore) : null;
   const ci = g.CI_low != null ? `${g.CI_low}–${g.CI_high}` : null;
   const chips = [
     `<span class="chip score">Final score <b>${pct(g.ConsensusScore)}</b></span>`,
-    `<span class="chip">On-target efficiency <b>${eff}</b></span>`,
+    `<span class="chip">${effLabel} <b>${eff}</b></span>`,
     `<span class="chip">GC <b>${g["GC%"]}%</b></span>`,
     cscan != null ? `<span class="chip">CRISPRscan <b>${cscan}</b></span>` : "",
     ci ? `<span class="chip">90% CI <b>${ci}</b></span>` : "",
@@ -208,17 +210,18 @@ function buildVerdict(g) {
   // Fuse on-target efficiency + (if scanned) off-target specificity into one
   // decision-grade verdict. Honest: it's a prioritization aid, not a guarantee.
   const eff = Number(g.ConsensusScore);
+  const metric = lastGoal === "knockout" ? "frameshift (knockout) potential" : "predicted efficiency";
   const spec = lastSpec.find((x) => x.gRNA === g.gRNA);
   const effHi = eff >= 0.6, effLo = eff < 0.4;
   if (!spec) {
-    const t = effHi ? "high predicted efficiency" : effLo ? "modest predicted efficiency" : "moderate predicted efficiency";
+    const t = effHi ? `high ${metric}` : effLo ? `modest ${metric}` : `moderate ${metric}`;
     return { cls: effHi ? "good" : effLo ? "low" : "mid", text: `Prioritized for ${t}. Run the off-target scan to assess specificity.` };
   }
   const sp = spec.CFD_Specificity, specHi = sp >= 80, specLo = sp < 50;
-  if (effHi && specHi) return { cls: "good", text: "✓ Strong candidate — high predicted efficiency and high specificity." };
+  if (effHi && specHi) return { cls: "good", text: `✓ Strong candidate — high ${metric} and high specificity.` };
   if (specLo) return { cls: "low", text: `⚠ Caution — ${spec.OffTargetCount} off-target site(s), specificity ${sp}. Consider an alternative guide.` };
-  if (effLo) return { cls: "mid", text: `Usable — specificity ${sp}, but modest predicted efficiency.` };
-  return { cls: "mid", text: `Reasonable candidate — efficiency and specificity (${sp}) both acceptable.` };
+  if (effLo) return { cls: "mid", text: `Usable — specificity ${sp}, but modest ${metric}.` };
+  return { cls: "mid", text: `Reasonable candidate — ${metric} and specificity (${sp}) both acceptable.` };
 }
 
 function scWord(v) {
@@ -351,19 +354,22 @@ $("designBtn").onclick = async () => {
   const btn = $("designBtn");
   busy(btn, true, "Designing…");
   try {
+    lastGoal = $("goal").value;
     const data = await postJSON("/api/design", {
       dna_sequence: $("dna").value,
       pam: $("pam").value,
       guide_length: Number($("guideLength").value),
       min_gc: Number($("minGc").value),
       max_gc: Number($("maxGc").value),
+      goal: lastGoal,
     });
     lastGuides = data.top_guides;
     lastSpec = [];
     sortState = { col: "ConsensusScore", dir: -1 };
     sortAndRenderGuides();
     renderRecommendation(lastGuides[0]);
-    setStatus($("guideSummary"), `Designed ${data.count} candidate guides — showing top ${Math.min(lastGuides.length, 100)}, ranked by score.`);
+    const goalLbl = data.goal === "knockout" ? "predicted frameshift (knockout)" : "cutting efficiency";
+    setStatus($("guideSummary"), `Designed ${data.count} candidate guides — ranked by ${goalLbl}, showing top ${Math.min(lastGuides.length, 100)}.`);
     $("exportGuidesBtn").disabled = !lastGuides.length;
     $("offBtn").disabled = !lastGuides.length;
     $("baseBtn").disabled = !lastGuides.length;

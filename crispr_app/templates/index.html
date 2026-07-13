@@ -57,6 +57,12 @@
           <label class="filelabel">Upload FASTA <input type="file" id="fastaFile" accept=".fa,.fasta,.txt,.seq" /></label>
         </div>
         <div class="grid">
+          <label title="Rank guides by the outcome you actually want, not just generic cutting">Editing goal
+            <select id="goal">
+              <option value="general">General — cutting efficiency</option>
+              <option value="knockout">Knockout — frameshift (out-of-frame)</option>
+            </select>
+          </label>
           <label>PAM / enzyme
             <select id="pam">
               <option value="NGG">SpCas9 · NGG</option>

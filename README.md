@@ -32,7 +32,7 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 
 | | Feature | What it means |
 |---|---|---|
-| 🎯 | **One Score + verdict** | A single 0–100 score, plus a recommended-guide card that fuses efficiency + specificity + uncertainty into a plain-language verdict. |
+| 🎯 | **Goal-aware ranking** | Pick your intent — *General* (cutting) or *Knockout* (frameshift) — and guides are ranked by the outcome you actually want, each with a plain-language verdict fusing efficiency + specificity + uncertainty. |
 | 🔍 | **Explainable** | Per-feature breakdown shown *by default*; plus an informational self-folding (secondary-structure) QC flag. |
 | 📐 | **Calibrated uncertainty** | Distribution-free **conformal** confidence interval per guide — *verified* 90% coverage. |
 | 🧬 | **Both-strand off-targets** | Vectorised NumPy scan + per-site **CFD** & **MIT/Hsu** + aggregate specificity. |

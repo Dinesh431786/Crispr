@@ -35,9 +35,13 @@ _LINEAR_PATH = os.environ.get("CRISPR_LINEAR_MODEL", str(_BASE_DIR / "models" / 
 # Shipped, version-controlled default model (pooled human SpCas9). A user-trained
 # linear.json takes precedence over it.
 _DEFAULT_PATH = str(_BASE_DIR / "models" / "default.json")
+# Goal-aware "knockout mode": a model trained on out-of-frame (frameshift)
+# efficiency instead of total cutting — ranks guides by functional knockout.
+_OOF_PATH = str(_BASE_DIR / "models" / "default_oof.json")
 _ONNX_PATH = os.environ.get("CRISPR_ONNX_MODEL", str(_BASE_DIR / "models" / "ontarget.onnx"))
 
 _linear_cache: "LinearModel | None" = None
+_oof_cache: "LinearModel | None | bool" = False   # False = not yet tried
 _onnx_cache = None
 _onnx_tried = False
 
@@ -84,6 +88,30 @@ def _load_linear() -> "LinearModel | None":
     return _linear_cache
 
 
+def _load_oof() -> "LinearModel | None":
+    """Load the out-of-frame (knockout-mode) model, if shipped."""
+    global _oof_cache
+    if _oof_cache is not False:
+        return _oof_cache or None
+    _oof_cache = None
+    p = Path(_OOF_PATH)
+    if p.is_file():
+        try:
+            _oof_cache = LinearModel.from_json(json.loads(p.read_text()))
+        except Exception:
+            _oof_cache = None
+    return _oof_cache
+
+
+def _goal_model(goal: str) -> "LinearModel | None":
+    """Model for a design goal: 'knockout' -> out-of-frame model (if present)."""
+    if goal == "knockout":
+        m = _load_oof()
+        if m is not None:
+            return m
+    return _load_linear()
+
+
 def _load_onnx():
     global _onnx_cache, _onnx_tried
     if _onnx_tried:
@@ -120,7 +148,17 @@ def active_backend(backend: str = "auto") -> str:
     return "heuristic"
 
 
-def predict_on_target(guide: str, ngg_context: str | None = None, backend: str = "auto") -> float:
+def predict_on_target(guide: str, ngg_context: str | None = None, backend: str = "auto",
+                      goal: str = "general") -> float:
+    """On-target score. ``goal='knockout'`` uses the out-of-frame model (rank by
+    predicted frameshift) when available; otherwise the general cutting model."""
+    if goal == "knockout":
+        m = _load_oof()
+        if m is not None:
+            try:
+                return m.predict(guide, ngg_context)
+            except Exception:
+                pass
     chosen = active_backend(backend)
     if chosen == "onnx":
         sess = _load_onnx()
@@ -141,13 +179,14 @@ def predict_on_target(guide: str, ngg_context: str | None = None, backend: str =
     return on_target_score(guide, ngg_context)
 
 
-def predict_interval(guide: str, ngg_context: str | None = None, level: str = "q90") -> dict | None:
-    """Conformal prediction interval for the on-target score, if calibrated.
+def predict_interval(guide: str, ngg_context: str | None = None, level: str = "q90",
+                     goal: str = "general") -> dict | None:
+    """Conformal prediction interval for the (goal-appropriate) on-target model.
 
     Returns {"point", "low", "high", "level", "coverage"} on the 0-1 scale, or
     None when the active model has no conformal calibration (e.g. heuristic).
     """
-    lm = _load_linear()
+    lm = _goal_model(goal)
     if lm is None or active_backend() == "onnx":
         return None
     conf = (lm.meta or {}).get("conformal") or {}
@@ -161,7 +200,8 @@ def predict_interval(guide: str, ngg_context: str | None = None, level: str = "q
 
 def reset_caches() -> None:
     """Test/CLI helper to forget loaded models."""
-    global _linear_cache, _onnx_cache, _onnx_tried
+    global _linear_cache, _oof_cache, _onnx_cache, _onnx_tried
     _linear_cache = None
+    _oof_cache = False
     _onnx_cache = None
     _onnx_tried = False
