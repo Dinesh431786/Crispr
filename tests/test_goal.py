@@ -49,3 +49,18 @@ def test_knockin_ranks_by_proximity():
     # A different target site re-ranks to a different #1 guide.
     df2 = find_gRNAs(SEQ, pam="NGG", goal="knockin", target_pos=180)
     assert df.iloc[0]["gRNA"] != df2.iloc[0]["gRNA"]
+
+
+def test_crispri_ranks_near_tss():
+    df = find_gRNAs(SEQ, pam="NGG", goal="crispri", target_pos=50)
+    assert "TSSDist" in df.columns
+    assert df.head(5)["TSSDist"].mean() < df["TSSDist"].mean()  # top cluster near TSS
+
+
+def test_baseedit_prioritizes_editable_guides():
+    df = find_gRNAs(SEQ, pam="NGG", goal="baseedit", editor="CBE")
+    assert "BE_targets" in df.columns
+    # The #1 guide must have a CBE-editable base in the window.
+    assert df.iloc[0]["BE_targets"] != ""
+    # CBE tags only reference C positions (from -> C).
+    assert all(t.startswith("C") for t in df.iloc[0]["BE_targets"].split(","))
