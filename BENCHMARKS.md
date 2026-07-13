@@ -14,7 +14,7 @@ generalisation test; competitor scores are read verbatim (no re-implementation).
 
 | Tool | doench2016 | chari2015 | morenoMateos | **mean** |
 |---|:---:|:---:|:---:|:---:|
-| **OURS (shipped, NumPy ridge)** | 0.245 | 0.412 | 0.166 | **0.274** |
+| **OURS (shipped, NumPy ridge)** | 0.258 | 0.420 | 0.192 | **0.290** |
 | CRISPRscan (Moreno-Mateos 2015) | 0.108 | 0.123 | 0.579¹ | 0.270 |
 | Azimuth / Rule Set 2 (Doench 2016) | 0.269² | 0.381 | 0.120 | 0.257 |
 | Chari (2015) | 0.121 | 0.457² | 0.145 | 0.241 |
@@ -42,8 +42,14 @@ On the large, clean **CRISPRon/Kim set (11,617 guides)**, 5-fold cross-validated
 
 | Model (our `features.featurize`) | ρ (5-fold CV) |
 |---|:---:|
-| NumPy ridge (shipped default) | **0.707** |
-| Gradient boosting (optional) | **0.737** |
+| NumPy ridge (shipped default) | **0.727** |
+| ...guide-only, before flanking context | 0.707 |
+
+The **+0.02 lift** came from a single refinement to the *existing* featurizer: add
+the **flanking sequence context** (6 nt upstream + PAM + 6 nt downstream) — the
+documented reason Rule Set 2 / DeepSpCas9 beat guide-only models. No new files, no
+dependencies; the context is extracted from the input sequence at inference and
+from the CRISPRon surrogate constructs at training.
 
 Wet-lab replicates of the *same* guide agree only at ρ≈0.71–0.77 (Haeussler 2016),
 so this **matches the assay's own reproducibility** — on par with DeepSpCas9
@@ -62,8 +68,8 @@ Empirical coverage on held-out data matches the guarantee exactly:
 
 | Interval | Half-width | Target | Measured |
 |---|:---:|:---:|:---:|
-| 80% | 0.225 | 0.80 | 0.800 |
-| 90% | 0.289 | 0.90 | 0.900 |
+| 80% | 0.220 | 0.80 | 0.801 |
+| 90% | 0.283 | 0.90 | 0.901 |
 
 To our knowledge no other lightweight CRISPR tool ships coverage-guaranteed
 uncertainty. `pytest tests/test_conformal.py` verifies the guarantee.
@@ -75,8 +81,8 @@ of "aware-from-the-start":
 
 | Mode | Kind | Ranking objective |
 |---|---|---|
-| General | model | cutting efficiency (ρ=0.707) |
-| Knockout | model | out-of-frame / frameshift (ρ=0.667; a dedicated model) |
+| General | model | cutting efficiency (ρ=0.727) |
+| Knockout | model | out-of-frame / frameshift (ρ=0.687; a dedicated model) |
 | Knock-in (HDR) | objective | cutting × exp(−cut-to-edit / 10 bp) |
 | CRISPRi/a | objective | activity × exp(−bind-to-TSS / 75 bp) |
 | Base editing | constraint | activity × window-centrality; only guides with a C/A in positions 4–8 |

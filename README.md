@@ -10,7 +10,7 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API--first-009688?logo=fastapi&logoColor=white)
 ![Dependencies](https://img.shields.io/badge/deps-lightweight%20(NumPy)-blue)
-![Accuracy](https://img.shields.io/badge/on--target%20%CF%81-0.71%E2%80%930.74%20(wet--lab%20band)-2e8b57)
+![Accuracy](https://img.shields.io/badge/on--target%20%CF%81-0.73%20(wet--lab%20band)-2e8b57)
 ![No API keys](https://img.shields.io/badge/API%20keys-none-9ee7d2)
 ![License](https://img.shields.io/badge/license-MIT-black)
 
@@ -94,9 +94,9 @@ Real output → 21 guides found. Top 3 (the API returns `ConsensusScore` in 0–
 
 | # | Guide (5′→3′) | PAM | Strand | GC% | Score | `ConsensusScore` |
 |---|---|:---:|:---:|:---:|:---:|:---:|
-| 1 | `AAGGTGTGGGTCGCGGACGA` | CGG | + | 65 | **72** | 0.718 |
-| 2 | `ATCGACGGTGTGGCGCGTGG` | CGG | − | 70 | **70** | 0.698 |
-| 3 | `GATGTGGCGGTCCGGATCGA` | CGG | − | 65 | **70** | 0.698 |
+| 1 | `AAGGTGTGGGTCGCGGACGA` | CGG | + | 65 | **72** | 0.724 |
+| 2 | `GATGTGGCGGTCCGGATCGA` | CGG | − | 65 | **70** | 0.698 |
+| 3 | `ATCGACGGTGTGGCGCGTGG` | CGG | − | 70 | **68** | 0.683 |
 
 `POST /api/explain` then returns the per-feature breakdown (GC, T<sub>m</sub>, position-specific contributions) **and the calibrated confidence interval** behind any guide's score.
 
@@ -135,8 +135,8 @@ target almost exactly:
 
 | Interval | Half-width | Target coverage | Measured coverage |
 |---|:---:|:---:|:---:|
-| 80% | 0.225 | 0.80 | **0.800** |
-| 90% | 0.289 | 0.90 | **0.900** |
+| 80% | 0.220 | 0.80 | **0.801** |
+| 90% | 0.283 | 0.90 | **0.901** |
 
 Wide intervals are a feature, not a bug: they make the model's genuine
 uncertainty explicit so a researcher doesn't over-trust a single number. To our
@@ -152,16 +152,18 @@ from CRISPOR; all datasets held out for our Kim-trained model):
 
 | Tool | doench2016 | chari2015 | morenoMateos | **mean** |
 |---|:---:|:---:|:---:|:---:|
-| **OURS (NumPy ridge)** | 0.245 | 0.412 | 0.166 | **0.274** |
+| **OURS (NumPy ridge)** | 0.258 | 0.420 | 0.192 | **0.290** |
 | CRISPRscan | 0.108 | 0.123 | 0.579 | 0.270 |
 | Azimuth / Rule Set 2 | 0.269 | 0.381 | 0.120 | 0.257 |
 | Wang SVM · Chari · SSC · WU-CRISPR | — | — | — | 0.15–0.24 |
 
-On truly held-out data our lightweight model has the **highest mean ρ**, matching
-CRISPRscan and edging Azimuth. Full table + reproduce command in **[BENCHMARKS.md](BENCHMARKS.md)**.
+On truly held-out data our lightweight model has the **highest mean ρ**, ahead of
+CRISPRscan and Azimuth. Full table + reproduce command in **[BENCHMARKS.md](BENCHMARKS.md)**.
 
 **Within a single clean dataset** (CRISPRon/Kim, 11,617 guides, 5-fold CV):
-ridge **ρ=0.707**, gradient boosting **0.737**.
+ridge **ρ=0.727** — lifted from 0.707 by adding **flanking sequence context**
+(6 nt upstream + PAM + 6 nt downstream) to the featurizer, the documented reason
+Rule Set 2 / DeepSpCas9 beat guide-only models.
 
 > 🎯 **Wet-lab-grade.** Wet-lab replicates of the *same* guide agree only at
 > **ρ≈0.71–0.77** — a hard ceiling for *any* predictor. At **0.71–0.74** the model

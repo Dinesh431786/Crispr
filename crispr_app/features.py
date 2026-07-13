@@ -33,20 +33,31 @@ _BI = {b: i for i, b in enumerate(_BASES)}
 _POSITIONS = 20
 
 
+# Flanking sequence context — the documented reason Rule Set 2 / DeepSpCas9 beat
+# guide-only models. up = 6 nt immediately 5' of the protospacer; down = 9 nt
+# immediately 3' of it (the 3-nt PAM + 6 nt downstream), both genomic 5'->3'.
+_FLANK_UP = 6
+_FLANK_DOWN = 9
+_N_FLANK = (_FLANK_UP + _FLANK_DOWN) * 4
+
+
 def feature_names() -> list[str]:
     names = [f"pos{p+1}_{b}" for p in range(_POSITIONS) for b in _BASES]
     names += [f"dipos{p+1}_{a}{b}" for p in range(_POSITIONS - 1) for a in _BASES for b in _BASES]
     names += [f"count_{b}" for b in _BASES]
     names += ["gc_count", "gc_count_sq", "tm_scaled"]
     names += [f"ngg_{b}" for b in _BASES]
+    names += [f"up{_FLANK_UP - p}_{b}" for p in range(_FLANK_UP) for b in _BASES]
+    names += [f"down{p+1}_{b}" for p in range(_FLANK_DOWN) for b in _BASES]
     return names
 
 
 def n_features() -> int:
-    return _POSITIONS * 4 + (_POSITIONS - 1) * 16 + 4 + 3 + 4
+    return _POSITIONS * 4 + (_POSITIONS - 1) * 16 + 4 + 3 + 4 + _N_FLANK
 
 
-def featurize(guide: str, ngg_context: str | None = None) -> np.ndarray:
+def featurize(guide: str, ngg_context: str | None = None,
+              up: str = "", down: str = "") -> np.ndarray:
     guide = guide.upper()
     n = len(guide)
     vec = np.zeros(n_features(), dtype=np.float64)
@@ -77,10 +88,28 @@ def featurize(guide: str, ngg_context: str | None = None) -> np.ndarray:
         bi = _BI.get(ngg_context[0].upper(), -1)
         if bi >= 0:
             vec[idx + bi] = 1.0
+    idx += 4
+
+    # Upstream flank: right-aligned so the nucleotide nearest the guide is pos -1.
+    up = ("N" * _FLANK_UP + (up or "").upper())[-_FLANK_UP:]
+    for p in range(_FLANK_UP):
+        bi = _BI.get(up[p], -1)
+        if bi >= 0:
+            vec[idx + p * 4 + bi] = 1.0
+    idx += _FLANK_UP * 4
+
+    # Downstream flank (PAM + 6 nt): left-aligned from just after the guide.
+    down = ((down or "").upper() + "N" * _FLANK_DOWN)[:_FLANK_DOWN]
+    for p in range(_FLANK_DOWN):
+        bi = _BI.get(down[p], -1)
+        if bi >= 0:
+            vec[idx + p * 4 + bi] = 1.0
 
     return vec
 
 
-def featurize_many(guides: list[str], contexts: list[str | None] | None = None) -> np.ndarray:
+def featurize_many(guides, contexts=None, ups=None, downs=None) -> np.ndarray:
     contexts = contexts or [None] * len(guides)
-    return np.vstack([featurize(g, c) for g, c in zip(guides, contexts)])
+    ups = ups or [""] * len(guides)
+    downs = downs or [""] * len(guides)
+    return np.vstack([featurize(g, c, u, d) for g, c, u, d in zip(guides, contexts, ups, downs)])

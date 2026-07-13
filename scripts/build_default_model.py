@@ -36,14 +36,43 @@ from train import fit_ridge  # noqa: E402
 TARGET_COLUMN = {"cutting": "total_indel_eff", "oof": "out_of_frame efficiency"}
 
 
+def _load_context(data_path: str) -> dict:
+    """Surrogate-ID -> construct sequence (carries the flanking genomic context)."""
+    ctx = {}
+    p = Path(data_path).parent / "full_seq.txt"
+    if not p.is_file():
+        return ctx
+    with open(p) as fh:
+        r = csv.reader(fh, delimiter="\t"); h = next(r)
+        si = h.index("Surrogate ID")
+        qi = next(i for i, c in enumerate(h) if "sequ" in c.lower())
+        for row in r:
+            if len(row) > max(si, qi):
+                ctx[row[si]] = row[qi].strip().upper()
+    return ctx
+
+
+def _flanks(guide: str, construct: str) -> tuple[str, str]:
+    """6 nt upstream, 9 nt (PAM+6) downstream from the surrogate-target occurrence."""
+    start = 0
+    while True:
+        j = construct.find(guide, start)
+        if j < 0:
+            return "", ""
+        if j >= 6 and j + 20 + 3 + 6 <= len(construct) and construct[j + 21:j + 23] == "GG":
+            return construct[j - 6:j], construct[j + 20:j + 29]
+        start = j + 1
+
+
 def load(path: str, column: str = "total_indel_eff"):
-    guides, y = [], []
+    ctx = _load_context(path)
+    guides, y, ups, downs = [], [], [], []
     with open(path) as fh:
         reader = csv.reader(fh, delimiter="\t")
         header = next(reader)
-        gi, ei = header.index("gRNA"), header.index(column)
+        gi, ei, si = header.index("gRNA"), header.index(column), header.index("Surrogate ID")
         for row in reader:
-            if len(row) <= max(gi, ei):
+            if len(row) <= max(gi, ei, si):
                 continue
             g = row[gi].strip().upper()
             try:
@@ -51,9 +80,9 @@ def load(path: str, column: str = "total_indel_eff"):
             except ValueError:
                 continue
             if len(g) == 20 and all(c in "ACGT" for c in g):
-                guides.append(g)
-                y.append(eff / 100.0)  # -> [0, 1] to match the model output range
-    return guides, np.array(y)
+                up, down = _flanks(g, ctx.get(row[si], ""))
+                guides.append(g); y.append(eff / 100.0); ups.append(up); downs.append(down)
+    return guides, np.array(y), ups, downs
 
 
 def main() -> None:
@@ -71,8 +100,8 @@ def main() -> None:
         fname = "default.json" if args.target == "cutting" else "default_oof.json"
         args.out = str(Path(__file__).resolve().parent.parent / "crispr_app" / "models" / fname)
 
-    guides, y = load(args.data, column)
-    X = featurize_many(guides)
+    guides, y, ups, downs = load(args.data, column)
+    X = featurize_many(guides, ups=ups, downs=downs)
     print(f"N = {len(guides)} guides")
 
     # Honest accuracy estimate: 5-fold cross-validated Spearman (NumPy folds).

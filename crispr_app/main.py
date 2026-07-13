@@ -29,7 +29,7 @@ from utils import load_fasta_text, validate_sequence
 BASE_DIR = Path(__file__).resolve().parent
 MAX_SEQ = 200_000  # input guard: max DNA characters accepted by JSON endpoints
 
-app = FastAPI(title="CRISPR Precision Studio", version="3.3.0")
+app = FastAPI(title="CRISPR Precision Studio", version="3.4.0")
 
 # CORS: configurable for deployment. Default "*" (open) but WITHOUT credentials,
 # which is the only spec-valid combination; set CRISPR_CORS_ORIGINS to a
@@ -121,16 +121,9 @@ def design_guides(payload: DesignRequest):
         editor=payload.editor if payload.editor in ("ABE", "CBE", "any") else "any",
     )
 
+    # Confidence intervals (flank-aware, goal-appropriate) are computed in
+    # find_gRNAs so they match the score's flanking context.
     top = guides.head(100).to_dict(orient="records")
-    # Attach the goal-appropriate calibrated confidence interval (0-100) per guide.
-    # Knock-in uses the cutting model (HDR still needs a cut); knockout uses OOF.
-    ci_goal = "knockout" if goal == "knockout" else "general"
-    for g in top:
-        ci = predict_interval(g["gRNA"], goal=ci_goal)
-        if ci is not None:
-            g["CI_low"] = round(ci["low"] * 100)
-            g["CI_high"] = round(ci["high"] * 100)
-            g["CI_level"] = int(ci["coverage"] * 100)
     return {
         "count": int(len(guides)),
         "model": active_backend(),
