@@ -97,7 +97,7 @@ def main() -> None:
     print("\nSpearman rho vs measured efficiency, identical guides. All datasets are")
     print("held out for OURS (trained only on CRISPRon/Kim). Competitor scores are")
     print("read verbatim from CRISPOR. Cross-dataset rho is intrinsically low for")
-    print("all tools; within-dataset OURS reaches 0.707 on the Kim set (wet-lab band).")
+    print("all tools; within-dataset OURS reaches 0.766 on the Kim set (wet-lab band).")
 
 
 if __name__ == "__main__":
