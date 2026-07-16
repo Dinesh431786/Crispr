@@ -145,6 +145,11 @@ gate, showed **no improvement**, and was removed (no dead code):
   gave only +0.0005 CV at matched regularisation — redundant with the 4-letter
   featurizer already present. Cross-dataset nudged up ~+0.0015 but the CV gate
   was not met.
+- **Trained deep model** (sklearn MLP 256→64, ReLU, backprop, early-stopped,
+  5-fold CV on the full featurizer): ρ 0.727 — **0.038 *below* linear ridge
+  (0.766)**. Real capacity doesn't help: the one-hot signal is additive and the
+  data is noise-limited, so a nonlinear model only overfits. Confirms the wall is
+  information, not model class.
 - **Nonlinearity** (pure-NumPy random-feature ELM, hidden 256–1024; low-rank
   pairwise-interaction features): ≤ +0.0006 CV over linear ridge at matched
   regularisation, and larger capacity *lowered* CV — the one-hot signal is
