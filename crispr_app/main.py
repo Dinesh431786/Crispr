@@ -29,7 +29,7 @@ from utils import load_fasta_text, validate_sequence
 BASE_DIR = Path(__file__).resolve().parent
 MAX_SEQ = 200_000  # input guard: max DNA characters accepted by JSON endpoints
 
-app = FastAPI(title="CRISPR Precision Studio", version="3.4.0")
+app = FastAPI(title="CRISPR Precision Studio", version="3.5.0")
 
 # CORS: configurable for deployment. Default "*" (open) but WITHOUT credentials,
 # which is the only spec-valid combination; set CRISPR_CORS_ORIGINS to a
