@@ -22,7 +22,7 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 
 ## 📸 The interface
 
-![CRISPR Precision Studio UI](docs/ui.png?v=aa0454bd)
+![CRISPR Precision Studio UI](docs/ui.png?v=19ad52b6)
 
 <sub>Rendered automatically by CI on every push — one **Score** per guide, with a per-feature **Details** breakdown.</sub>
 
