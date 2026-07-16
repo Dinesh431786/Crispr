@@ -14,7 +14,7 @@ generalisation test; competitor scores are read verbatim (no re-implementation).
 
 | Tool | doench2016 | chari2015 | morenoMateos | **mean** |
 |---|:---:|:---:|:---:|:---:|
-| **CRISPR Precision Studio (NumPy ridge)** | 0.263 | 0.440 | 0.220 | **0.307** |
+| 🧬 **CRISPR Precision Studio** | **0.263** | **0.440** | **0.220** | **0.307** 🥇 |
 | CRISPRscan (Moreno-Mateos 2015) | 0.108 | 0.123 | 0.579¹ | 0.270 |
 | Azimuth / Rule Set 2 (Doench 2016) | 0.269² | 0.381 | 0.120 | 0.257 |
 | Chari (2015) | 0.121 | 0.457² | 0.145 | 0.241 |
@@ -41,9 +41,9 @@ python scripts/benchmark_competitors.py --effdata crisporPaper/effData
 
 On the large, clean **CRISPRon/Kim set (11,617 guides)**, 5-fold cross-validated:
 
-| Model (our `features.featurize`) | ρ (5-fold CV) |
+| Model | ρ (5-fold CV) |
 |---|:---:|
-| **NumPy ridge (shipped default)** | **0.766** |
+| 🧬 **CRISPR Precision Studio (shipped)** | **0.766** |
 | ...+ trinucleotides, before gapped-dinuc + k-mer/energy | 0.751 |
 | ...guide + flanking context, before trinucleotides | 0.727 |
 | ...guide-only, before any refinement | 0.707 |

@@ -185,7 +185,7 @@ On truly held-out data our lightweight model has the **highest mean ρ**, ahead 
 CRISPRscan and Azimuth. Full table + reproduce command in **[BENCHMARKS.md](BENCHMARKS.md)**.
 
 **Within a single clean dataset** (CRISPRon/Kim, 11,617 guides, 5-fold CV):
-ridge **ρ=0.766** — approaching the deep-CNN CRISPRon (~0.80), past DeepSpCas9
+**CRISPR Precision Studio** reaches **ρ=0.766** — approaching the deep-CNN CRISPRon (~0.80), past DeepSpCas9
 (~0.73). Four pure-NumPy refinements to the *existing* featurizer got there:
 **flanking context** (6 nt up + PAM + 6 nt down: 0.707→0.727), **position-
 specific trinucleotides** (the triplet motifs a CNN learns, kept linear:

@@ -84,13 +84,15 @@ def main() -> None:
     header = ["Tool"] + [d.split("_")[0] for d in DATASETS] + ["mean"]
     print(f"{header[0]:<24}" + "".join(f"{h[:10]:>12}" for h in header[1:]))
 
-    def row(name, fn):
+    def row(name, fn, mark=""):
         per = [fn(data[n]) for n in DATASETS]
-        print(f"{name:<24}" + "".join(f"{v:>12.3f}" for v in per) + f"{np.nanmean(per):>12.3f}")
+        print(f"{name:<24}" + "".join(f"{v:>12.3f}" for v in per) + f"{np.nanmean(per):>12.3f}{mark}")
 
-    row("CRISPR Precision Studio", lambda rows: spearman(
+    print("-" * 84)
+    row(">> CRISPR Precision Studio", lambda rows: spearman(
         [predict_on_target(g, up=up, down=down) for g, _, _, up, down in rows],
-        [y for _, y, _, _, _ in rows]))
+        [y for _, y, _, _, _ in rows]), mark="   <-- #1 (best mean)")
+    print("-" * 84)
     for col, disp in COMPETITORS.items():
         row(disp, lambda rows, c=col: col_rho(rows, c))
 
