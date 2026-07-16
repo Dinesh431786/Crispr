@@ -125,8 +125,15 @@ backend (`models.py`) lets you drop in a trained DeepSpCas9/CRISPRon export.
 Recorded for integrity — each was implemented, measured against a pre-declared
 gate, showed **no improvement**, and was removed (no dead code):
 
-- **Topological features** (Chaos-Game-Representation + persistent homology): a
-  30-mer is fully described by one-hot, so TDA is a lossy re-view — ρ 0.558→0.553.
+- **Topological features / persistent homology** — tested twice, both null.
+  (a) Chaos-Game-Representation + persistence: ρ 0.558→0.553. (b) `ripser`
+  persistent homology of a *novel* encoding — Takens delay-embedding of the
+  EIIP/physicochemical property track plus a purine/keto/H-bond point cloud, 30
+  H0+H1 summary features on top of the shipped 0.766 model: ΔCV −0.0001,
+  Δcross +0.0004 at matched alpha. A 20-nt guide is fully described by one-hot,
+  so every topological summary is a *lossy* function of information ridge already
+  has — it cannot add signal, only discard it. (Would also break the NumPy-only,
+  zero-setup promise by pulling in a C++/Cython dependency.)
 - **R-loop free-energy physics** (RNA:DNA vs DNA:DNA ΔG, Sugimoto/SantaLucia NN
   params): Δcross = −0.000 (redundant with GC/Tm already in the model).
 - **sgRNA self-complementarity** (Nussinov): Δ ≈ −0.000; kept only as an
