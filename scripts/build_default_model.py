@@ -92,7 +92,7 @@ def main() -> None:
                     help="cutting = total_indel_eff (general/default.json); "
                          "oof = out_of_frame efficiency (knockout mode / default_oof.json)")
     ap.add_argument("--out", default=None)
-    ap.add_argument("--alpha", type=float, default=40.0)
+    ap.add_argument("--alpha", type=float, default=150.0)
     args = ap.parse_args()
 
     column = TARGET_COLUMN[args.target]
