@@ -14,7 +14,7 @@ generalisation test; competitor scores are read verbatim (no re-implementation).
 
 | Tool | doench2016 | chari2015 | morenoMateos | **mean** |
 |---|:---:|:---:|:---:|:---:|
-| **OURS (shipped, NumPy ridge)** | 0.263 | 0.440 | 0.220 | **0.307** |
+| **CRISPR Precision Studio (NumPy ridge)** | 0.263 | 0.440 | 0.220 | **0.307** |
 | CRISPRscan (Moreno-Mateos 2015) | 0.108 | 0.123 | 0.579¹ | 0.270 |
 | Azimuth / Rule Set 2 (Doench 2016) | 0.269² | 0.381 | 0.120 | 0.257 |
 | Chari (2015) | 0.121 | 0.457² | 0.145 | 0.241 |

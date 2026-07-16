@@ -22,9 +22,33 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 
 ## 📸 The interface
 
-![CRISPR Precision Studio UI](docs/ui.png?v=109d87fa)
+![CRISPR Precision Studio UI](docs/ui.png?v=aa0454bd)
 
 <sub>Rendered automatically by CI on every push — one **Score** per guide, with a per-feature **Details** breakdown.</sub>
+
+---
+
+## 🧭 What it does (in plain English)
+
+Paste a DNA sequence. **CRISPR Precision Studio** finds every possible guide RNA,
+**scores and ranks them** so you know which to try first — and, unlike most tools,
+**shows you *why*** each guide scored the way it did and **how confident** it is.
+It also checks each guide for off-target risk, and designs base-editing and
+prime-editing guides.
+
+**Three things make it different:**
+
+1. **One clear score, explained.** Every guide gets a single **0–100** ranking
+   score with a plain-language verdict and a per-feature breakdown — no black box.
+2. **It tells you when it's unsure.** Each score carries a calibrated confidence
+   interval with *mathematically guaranteed* coverage — not a bare number.
+3. **Accurate *and* honest.** ρ≈0.77 on-target (wet-lab-grade) and **#1
+   cross-dataset** vs six industry tools — every figure measured and reproducible,
+   never asserted.
+
+**Who it's for:** molecular biologists choosing guides for a knockout, knock-in,
+CRISPRi/a, base-edit or prime-edit experiment — running locally, with no GPU, no
+account and no API keys.
 
 ---
 
@@ -152,7 +176,7 @@ from CRISPOR; all datasets held out for our Kim-trained model):
 
 | Tool | doench2016 | chari2015 | morenoMateos | **mean** |
 |---|:---:|:---:|:---:|:---:|
-| **OURS (NumPy ridge)** | 0.263 | 0.440 | 0.220 | **0.307** |
+| **CRISPR Precision Studio** | 0.263 | 0.440 | 0.220 | **0.307** |
 | CRISPRscan | 0.108 | 0.123 | 0.579 | 0.270 |
 | Azimuth / Rule Set 2 | 0.269 | 0.381 | 0.120 | 0.257 |
 | Wang SVM · Chari · SSC · WU-CRISPR | — | — | — | 0.15–0.24 |

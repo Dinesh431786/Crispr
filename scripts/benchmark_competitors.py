@@ -88,16 +88,17 @@ def main() -> None:
         per = [fn(data[n]) for n in DATASETS]
         print(f"{name:<24}" + "".join(f"{v:>12.3f}" for v in per) + f"{np.nanmean(per):>12.3f}")
 
-    row("OURS (shipped)", lambda rows: spearman(
+    row("CRISPR Precision Studio", lambda rows: spearman(
         [predict_on_target(g, up=up, down=down) for g, _, _, up, down in rows],
         [y for _, y, _, _, _ in rows]))
     for col, disp in COMPETITORS.items():
         row(disp, lambda rows, c=col: col_rho(rows, c))
 
     print("\nSpearman rho vs measured efficiency, identical guides. All datasets are")
-    print("held out for OURS (trained only on CRISPRon/Kim). Competitor scores are")
-    print("read verbatim from CRISPOR. Cross-dataset rho is intrinsically low for")
-    print("all tools; within-dataset OURS reaches 0.766 on the Kim set (wet-lab band).")
+    print("held out for CRISPR Precision Studio (trained only on CRISPRon/Kim).")
+    print("Competitor scores are read verbatim from CRISPOR. Cross-dataset rho is")
+    print("intrinsically low for all tools; within-dataset Precision Studio reaches")
+    print("0.766 on the Kim set (wet-lab reproducibility band).")
 
 
 if __name__ == "__main__":
