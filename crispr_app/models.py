@@ -229,6 +229,36 @@ def predict_on_target(guide: str, ngg_context: str | None = None, backend: str =
     return on_target_score(guide, ngg_context)
 
 
+def sensitivity_scan(guide: str, ngg_context: str | None = None,
+                     goal: str = "general", up: str = "", down: str = "") -> dict:
+    """Single-nucleotide saturation sensitivity of the on-target score.
+
+    Mutates every spacer position to each of the other three bases (keeping the
+    flanking context fixed) and re-scores — a full what-if map showing which
+    positions the model cares about and the best/worst single change. Fast
+    (linear model), fully deterministic, no new data.
+    """
+    guide = guide.upper()
+    base = predict_on_target(guide, ngg_context, goal=goal, up=up, down=down)
+    subs, per_position = [], []
+    for i, orig in enumerate(guide):
+        deltas = []
+        for b in "ACGT":
+            if b == orig:
+                continue
+            mut = guide[:i] + b + guide[i + 1:]
+            s = predict_on_target(mut, ngg_context, goal=goal, up=up, down=down)
+            d = round(s - base, 3)
+            subs.append({"pos": i + 1, "from": orig, "to": b, "score": s, "delta": d})
+            deltas.append(d)
+        per_position.append({"pos": i + 1, "base": orig,
+                             "max_abs": round(max((abs(d) for d in deltas), default=0.0), 3)})
+    best = max(subs, key=lambda r: r["delta"]) if subs else None
+    worst = min(subs, key=lambda r: r["delta"]) if subs else None
+    return {"guide": guide, "baseline": base, "substitutions": subs,
+            "per_position": per_position, "best": best, "worst": worst}
+
+
 def predict_interval(guide: str, ngg_context: str | None = None, level: str = "q90",
                      goal: str = "general", up: str = "", down: str = "") -> dict | None:
     """Conformal prediction interval for the (goal-appropriate) on-target model.

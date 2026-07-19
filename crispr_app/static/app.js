@@ -68,6 +68,14 @@ function toCSV(rows) {
   return [cols.join(","), ...rows.map((r) => cols.map((c) => esc(r[c])).join(","))].join("\n");
 }
 
+// FASTA export (Benchling / SnapGene / any tool imports FASTA): one record per
+// guide, header carries strand/start/score so the context survives the round-trip.
+function toFASTA(rows) {
+  return rows.map((r) =>
+    `>${r.gRNA}|${r.Strand}strand|start${r.Start}|score${Math.round(Number(r.ConsensusScore) * 100)}\n${r.gRNA}`
+  ).join("\n");
+}
+
 function toTable(elementId, rows) {
   const t = $(elementId);
   if (!rows || !rows.length) { t.innerHTML = ""; return; }
@@ -208,8 +216,39 @@ async function renderRecommendation(g) {
     <div class="chips">${chips}</div>
     <div class="why"><b>Why this guide:</b> ${buildReason(bd, g)}</div>
     ${bars}
-    <p class="status" style="margin:.5rem 0 0">Bars show each sequence feature's contribution to the on-target score${ci ? `; the 90% interval [${ci}] reflects genuine model uncertainty` : ""}.</p>`;
+    <p class="status" style="margin:.5rem 0 0">Bars show each sequence feature's contribution to the on-target score${ci ? `; the 90% interval [${ci}] reflects genuine model uncertainty` : ""}.</p>
+    <div class="row" style="margin-top:.6rem"><button class="ghost tiny" id="whatifBtn">What-if: mutation sensitivity</button></div>
+    <div id="whatifPanel"></div>`;
   el.hidden = false;
+  const wb = $("whatifBtn");
+  if (wb) wb.onclick = () => runWhatif(g);
+}
+
+async function runWhatif(g) {
+  const panel = $("whatifPanel");
+  panel.innerHTML = `<p class="status">Scanning every single-base change…</p>`;
+  let d;
+  try { d = await postJSON("/api/sensitivity", { guide: g.gRNA, goal: lastGoal }); }
+  catch (e) { panel.innerHTML = `<p class="status error">${e.message}</p>`; return; }
+  const max = Math.max(0.05, ...d.per_position.map((p) => p.max_abs));
+  // Per-position sensitivity strip: bar height ∝ how much the best single change
+  // at that position moves the score; colour = does the best change help (green)
+  // or does every change hurt (red, i.e. the current base is already optimal here).
+  const bars = d.per_position.map((p) => {
+    const h = Math.round((p.max_abs / max) * 34) + 2;
+    const helps = d.substitutions.some((s) => s.pos === p.pos && s.delta > 0.001);
+    const col = helps ? "var(--mid)" : "var(--good)";
+    const tip = `pos ${p.pos} (${p.base}): max |Δ| ${p.max_abs}`;
+    return `<span title="${tip}" style="display:inline-flex;flex-direction:column;align-items:center;width:4.4%;">
+      <span style="height:38px;display:flex;align-items:flex-end"><span style="width:8px;height:${h}px;background:${col};border-radius:2px"></span></span>
+      <span style="font-family:var(--mono);font-size:.62rem;color:var(--ink-faint)">${p.base}</span></span>`;
+  }).join("");
+  const fmt = (s) => `position ${s.pos} ${s.from}→${s.to} (${s.delta >= 0 ? "+" : ""}${s.delta})`;
+  panel.innerHTML = `
+    <div style="display:flex;gap:1px;margin-top:.5rem">${bars}</div>
+    <p class="status" style="margin:.4rem 0 0">Height = impact of the best single change at each position (taller = the model is more sensitive there; positions near the PAM/seed usually dominate).
+      <br><b>Best single improvement:</b> ${d.best && d.best.delta > 0 ? fmt(d.best) : "none — this guide is already locally optimal"}.
+      <b>Most damaging change:</b> ${d.worst ? fmt(d.worst) : "—"}.</p>`;
 }
 
 function buildVerdict(g) {
@@ -403,8 +442,14 @@ $("designBtn").onclick = async () => {
       robust: " · robust order (uncertainty-penalised)",
       optimistic: " · optimistic order (best-case CI bound)",
     }[data.ranking_strategy] || "";
-    setStatus($("guideSummary"), `Designed ${data.count} candidate guides — ranked by ${goalLbl}${stratLbl}, showing top ${Math.min(lastGuides.length, 100)}.`);
+    // Non-standard systems (Cas12a TTTV, SpCas9-NG, non-20-nt) fall outside the
+    // SpCas9-NGG-20nt data the learned model + CRISPRscan were validated on —
+    // label the scoring as heuristic so nobody over-trusts it.
+    const standard = $("pam").value === "NGG" && Number($("guideLength").value) === 20;
+    const heuristicNote = standard ? "" : " ⚠ heuristic scoring (model validated on SpCas9·NGG·20 nt).";
+    setStatus($("guideSummary"), `Designed ${data.count} candidate guides — ranked by ${goalLbl}${stratLbl}, showing top ${Math.min(lastGuides.length, 100)}.${heuristicNote}`);
     $("exportGuidesBtn").disabled = !lastGuides.length;
+    $("exportFastaBtn").disabled = !lastGuides.length;
     $("offBtn").disabled = !lastGuides.length;
     $("baseBtn").disabled = !lastGuides.length;
     $("explainPanel").classList.remove("open");
@@ -592,6 +637,7 @@ $("mplexBtn").onclick = async () => {
 
 /* export */
 $("exportGuidesBtn").onclick = () => download("guides.csv", toCSV(lastGuides));
+$("exportFastaBtn").onclick = () => download("guides.fasta", toFASTA(lastGuides));
 $("exportOffBtn").onclick = () => download("offtargets.csv", toCSV(lastOff));
 $("exportPrimeBtn").onclick = () => download("pegrnas.csv", toCSV(lastPeg));
 $("exportMplexBtn").onclick = () => download("multiplex_library.csv", toCSV(lastMplex));

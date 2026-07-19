@@ -23,7 +23,7 @@ from analysis import (
     summarize_specificity,
 )
 from base_edit import summarize as base_edit_summarize
-from models import active_backend, available_backends, predict_interval
+from models import active_backend, available_backends, predict_interval, sensitivity_scan
 from scoring import score_breakdown
 from structure import self_complementarity
 from utils import load_fasta_text, validate_sequence
@@ -223,6 +223,22 @@ def explain(payload: ExplainRequest):
     # showed no independent effect on efficiency — flagged for transparency only).
     out["self_complementarity"] = self_complementarity(payload.guide)
     return out
+
+
+class SensitivityRequest(BaseModel):
+    guide: str = Field(..., min_length=18, max_length=25)
+    ngg_context: str | None = None
+    goal: str = "general"
+    up: str = ""
+    down: str = ""
+
+
+@app.post("/api/sensitivity")
+def sensitivity(payload: SensitivityRequest):
+    """What-if: single-nucleotide saturation sensitivity of the on-target score."""
+    goal = payload.goal if payload.goal in ("general", "knockout") else "general"
+    return sensitivity_scan(payload.guide.strip().upper(), payload.ngg_context,
+                            goal=goal, up=payload.up, down=payload.down)
 
 
 @app.post("/api/upload-fasta")

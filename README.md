@@ -22,7 +22,7 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 
 ## 📸 The interface
 
-![CRISPR Precision Studio UI](docs/ui.png?v=8a433fcf)
+![CRISPR Precision Studio UI](docs/ui.png?v=02740f16)
 
 <sub>Rendered automatically by CI on every push — one **Score** per guide, with a per-feature **Details** breakdown.</sub>
 
@@ -58,6 +58,7 @@ account and no API keys.
 |---|---|---|
 | 🎯 | **Goal-aware ranking** | Pick your intent — *General* (cutting) · *Knockout* (frameshift model) · *Knock-in/HDR* (cut-proximity) · *CRISPRi/a* (TSS-proximity) · *Base editing* (ABE/CBE target in window) — and guides are ranked by the outcome you actually want, each with a plain-language verdict fusing efficiency + specificity + uncertainty. |
 | 🔍 | **Explainable** | Per-feature breakdown shown *by default*; plus an informational self-folding (secondary-structure) QC flag. |
+| 🔬 | **What-if sensitivity** | One click maps every single-base change in the spacer to its Δscore — see which positions the model cares about and the best/worst mutation (saturation mutagenesis, instant). |
 | 📐 | **Calibrated uncertainty** | Distribution-free **conformal** confidence interval per guide — *verified* 90% coverage, with **per-guide adaptive width** (normalized conformal). |
 | ⚖️ | **Uncertainty-aware ranking** | Rank by *balanced*, *conservative* (pessimistic CI bound), *robust* (uncertainty-penalised), or *optimistic* — turn the interval into a decision, not just a display. |
 | 🧬 | **Both-strand off-targets** | Vectorised NumPy scan + per-site **CFD** & **MIT/Hsu** + aggregate specificity. |
@@ -296,6 +297,7 @@ Browser renders one ranked table
 | `POST /api/design-multiplex` | greedy marginal-gain pooled/multiplex guide set (strong + diverse) |
 | `POST /api/prime-design` | ranked pegRNAs (Spacer + RTT + PBS) |
 | `POST /api/explain` | per-feature breakdown + conformal confidence interval |
+| `POST /api/sensitivity` | what-if: Δscore of every single-base spacer mutation (saturation map) |
 | `POST /api/upload-fasta` | parse pasted FASTA / plain DNA |
 | `GET /api/models` | active & available on-target backends |
 
