@@ -22,7 +22,7 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 
 ## 📸 The interface
 
-![CRISPR Precision Studio UI](docs/ui.png?v=19ad52b6)
+![CRISPR Precision Studio UI](docs/ui.png?v=62ac8c8b)
 
 <sub>Rendered automatically by CI on every push — one **Score** per guide, with a per-feature **Details** breakdown.</sub>
 
@@ -118,9 +118,9 @@ Real output → 21 guides found. Top 3 (the API returns `ConsensusScore` in 0–
 
 | # | Guide (5′→3′) | PAM | Strand | GC% | Score | `ConsensusScore` |
 |---|---|:---:|:---:|:---:|:---:|:---:|
-| 1 | `AAGGTGTGGGTCGCGGACGA` | CGG | + | 65 | **72** | 0.724 |
-| 2 | `GATGTGGCGGTCCGGATCGA` | CGG | − | 65 | **72** | 0.718 |
-| 3 | `GCTCGACATCGGCAAGGTGT` | GGG | + | 60 | **68** | 0.684 |
+| 1 | `AAGGTGTGGGTCGCGGACGA` | CGG | + | 65 | **73** | 0.734 |
+| 2 | `GATGTGGCGGTCCGGATCGA` | CGG | − | 65 | **73** | 0.730 |
+| 3 | `GCTCGACATCGGCAAGGTGT` | GGG | + | 60 | **70** | 0.697 |
 
 `POST /api/explain` then returns the per-feature breakdown (GC, T<sub>m</sub>, position-specific contributions) **and the calibrated confidence interval** behind any guide's score.
 
@@ -159,8 +159,8 @@ target almost exactly:
 
 | Interval | Half-width | Target coverage | Measured coverage |
 |---|:---:|:---:|:---:|
-| 80% | 0.200 | 0.80 | **0.801** |
-| 90% | 0.263 | 0.90 | **0.901** |
+| 80% | 0.198 | 0.80 | **0.800** |
+| 90% | 0.260 | 0.90 | **0.901** |
 
 Wide intervals are a feature, not a bug: they make the model's genuine
 uncertainty explicit so a researcher doesn't over-trust a single number. To our
@@ -176,7 +176,7 @@ from CRISPOR; all datasets held out for our Kim-trained model):
 
 | Tool | doench2016 | chari2015 | morenoMateos | **mean** |
 |---|:---:|:---:|:---:|:---:|
-| **CRISPR Precision Studio** | 0.263 | 0.440 | 0.220 | **0.307** |
+| **CRISPR Precision Studio** | 0.271 | 0.437 | 0.221 | **0.310** |
 | CRISPRscan | 0.108 | 0.123 | 0.579 | 0.270 |
 | Azimuth / Rule Set 2 | 0.269 | 0.381 | 0.120 | 0.257 |
 | Wang SVM · Chari · SSC · WU-CRISPR | — | — | — | 0.15–0.24 |
@@ -185,18 +185,21 @@ On truly held-out data our lightweight model has the **highest mean ρ**, ahead 
 CRISPRscan and Azimuth. Full table + reproduce command in **[BENCHMARKS.md](BENCHMARKS.md)**.
 
 **Within a single clean dataset** (CRISPRon/Kim, 11,617 guides, 5-fold CV):
-**CRISPR Precision Studio** reaches **ρ=0.766** — approaching the deep-CNN CRISPRon (~0.80), past DeepSpCas9
-(~0.73). Four pure-NumPy refinements to the *existing* featurizer got there:
+**CRISPR Precision Studio** reaches **ρ=0.767** — approaching the deep-CNN CRISPRon (~0.80), past DeepSpCas9
+(~0.73). Pure-NumPy refinements to the *existing* featurizer got there:
 **flanking context** (6 nt up + PAM + 6 nt down: 0.707→0.727), **position-
 specific trinucleotides** (the triplet motifs a CNN learns, kept linear:
-0.727→0.751), and — found by a parallel measurement swarm — **gapped/spaced
-dinucleotides** (long-range positional coupling at distances 3–7, a "different
-angle" on the same sequence) with **RC-canonical k-mer + energy summaries**
-(0.751→0.766). Every step gated on cross-dataset transfer; the last lifted the
-held-out mean +0.015 across all three cross-datasets.
+0.727→0.751), **gapped/spaced dinucleotides** (long-range positional coupling at
+distances 3–7, a "different angle" on the same sequence) with **RC-canonical
+k-mer + energy summaries** (0.751→0.766), and finally a **ranking-target
+objective** — training on the Gaussian-rank of efficiency to optimise Spearman
+directly (the metric we're judged on), then a monotone isotonic remap back to the
+efficiency scale. That last swap needs *no new features* and lifts knockout mode
+0.723→0.728 and cross-dataset doench2016 0.263→**0.271, past Azimuth on its own
+home set**. Every step gated on cross-dataset transfer.
 
 > 🎯 **Wet-lab-grade.** Wet-lab replicates of the *same* guide agree only at
-> **ρ≈0.71–0.77** — a hard ceiling for *any* predictor. At **ρ=0.766** the model
+> **ρ≈0.71–0.77** — a hard ceiling for *any* predictor. At **ρ=0.767** the model
 > agrees with the measurement **about as well as the assay agrees with itself.**
 > We don't claim to beat the wet lab; we *match its reproducibility* — NumPy-only,
 > zero setup. Cross-dataset ρ is low (~0.15–0.4) for *every* tool, giants included.

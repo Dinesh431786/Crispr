@@ -47,12 +47,28 @@ _onnx_tried = False
 
 
 class LinearModel:
-    """Linear/ridge model: efficiency = clip(x . w + b, 0, 1)."""
+    """Linear/ridge model: raw = x . w + b, then an optional monotone calibration
+    maps the raw score back to the 0-1 efficiency scale.
 
-    def __init__(self, weights: np.ndarray, intercept: float, meta: dict | None = None):
+    When the model is trained on a rank-transformed target (to optimise the
+    ranking metric, Spearman, rather than squared error), the raw linear output
+    is in rank units, not efficiency. ``calibration`` = (xs, ys) is a monotone
+    non-decreasing lookup (isotonic fit on the training set) that maps raw -> the
+    0-1 efficiency scale via ``np.interp``. Being monotone, it preserves the
+    ranking exactly while restoring the efficiency scale the UI and the conformal
+    intervals live on. Absent -> the raw score is already the efficiency estimate
+    (the classic MSE-trained model), so behaviour is unchanged.
+    """
+
+    def __init__(self, weights: np.ndarray, intercept: float, meta: dict | None = None,
+                 calibration: tuple[np.ndarray, np.ndarray] | None = None):
         self.weights = np.asarray(weights, dtype=np.float64)
         self.intercept = float(intercept)
         self.meta = meta or {}
+        self.calibration = None
+        if calibration is not None:
+            xs, ys = calibration
+            self.calibration = (np.asarray(xs, dtype=np.float64), np.asarray(ys, dtype=np.float64))
 
     def predict(self, guide: str, ngg_context: str | None = None,
                 up: str = "", down: str = "") -> float:
@@ -60,14 +76,22 @@ class LinearModel:
         if x.shape[0] != self.weights.shape[0]:
             raise ValueError("feature/weight dimension mismatch")
         y = float(x @ self.weights + self.intercept)
+        if self.calibration is not None:
+            y = float(np.interp(y, self.calibration[0], self.calibration[1]))
         return round(max(0.0, min(1.0, y)), 3)
 
     def to_json(self) -> dict:
-        return {"weights": self.weights.tolist(), "intercept": self.intercept, "meta": self.meta}
+        d = {"weights": self.weights.tolist(), "intercept": self.intercept, "meta": self.meta}
+        if self.calibration is not None:
+            d["calibration"] = {"x": self.calibration[0].tolist(), "y": self.calibration[1].tolist()}
+        return d
 
     @classmethod
     def from_json(cls, data: dict) -> "LinearModel":
-        return cls(np.array(data["weights"], dtype=np.float64), data["intercept"], data.get("meta", {}))
+        c = data.get("calibration")
+        calib = (c["x"], c["y"]) if c else None
+        return cls(np.array(data["weights"], dtype=np.float64), data["intercept"],
+                   data.get("meta", {}), calib)
 
     def save(self, path: str) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)

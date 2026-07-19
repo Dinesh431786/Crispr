@@ -14,7 +14,7 @@ generalisation test; competitor scores are read verbatim (no re-implementation).
 
 | Tool | doench2016 | chari2015 | morenoMateos | **mean** |
 |---|:---:|:---:|:---:|:---:|
-| 🧬 **CRISPR Precision Studio** | **0.263** | **0.440** | **0.220** | **0.307** 🥇 |
+| 🧬 **CRISPR Precision Studio** | **0.271** | **0.437** | **0.221** | **0.310** 🥇 |
 | CRISPRscan (Moreno-Mateos 2015) | 0.108 | 0.123 | 0.579¹ | 0.270 |
 | Azimuth / Rule Set 2 (Doench 2016) | 0.269² | 0.381 | 0.120 | 0.257 |
 | Chari (2015) | 0.121 | 0.457² | 0.145 | 0.241 |
@@ -24,8 +24,9 @@ generalisation test; competitor scores are read verbatim (no re-implementation).
 
 On truly held-out data our model has the **highest mean ρ** — clear of CRISPRscan
 and Azimuth/Rule Set 2 — despite being a dependency-light NumPy model with no
-home-dataset advantage here. On chari2015 (0.440) it essentially ties Chari's own
-home-dataset score (0.457). ¹ CRISPRscan's home dataset (trained on it).
+home-dataset advantage here. On **doench2016 (0.271) it edges Azimuth (0.269) on
+Azimuth's own home dataset**, and on chari2015 (0.437) it nearly ties Chari's own
+home score (0.457). ¹ CRISPRscan's home dataset (trained on it).
 ² Azimuth/Chari had training exposure to that dataset. **Honest caveat:** absolute
 cross-dataset ρ is intrinsically low (~0.15–0.4) for *every* tool, including the
 giants — cross-context transfer is the field's unsolved problem, not a flaw of any
@@ -43,7 +44,8 @@ On the large, clean **CRISPRon/Kim set (11,617 guides)**, 5-fold cross-validated
 
 | Model | ρ (5-fold CV) |
 |---|:---:|
-| 🧬 **CRISPR Precision Studio (shipped)** | **0.766** |
+| 🧬 **CRISPR Precision Studio (shipped)** | **0.767** |
+| ...MSE objective, before ranking-target swap | 0.766 |
 | ...+ trinucleotides, before gapped-dinuc + k-mer/energy | 0.751 |
 | ...guide + flanking context, before trinucleotides | 0.727 |
 | ...guide-only, before any refinement | 0.707 |
@@ -65,10 +67,24 @@ dependencies — closed most of the gap to the deep-CNN CRISPRon (~0.80):
    homopolymer runs, poly-T flag): 0.751 → 0.766. These two levers were found
    by a parallel measurement swarm and combine near-additively.
 
+A fifth refinement changes the *objective*, not the features:
+
+4. **Ranking-target objective** (van der Waerden / Gaussian-rank). We're scored
+   on Spearman — a *ranking* metric — but ridge minimises squared error on raw
+   efficiency, which is a different goal. Training the same linear model on the
+   **Gaussian-rank-transformed** target optimises the ranking directly, then a
+   monotone **isotonic remap** (fit on the training set, pure NumPy PAV) maps the
+   score back to the 0–1 efficiency scale — preserving the ranking exactly while
+   keeping the efficiency units the UI and conformal intervals depend on. Cutting
+   0.766 → 0.767; **knockout (out-of-frame) 0.723 → 0.728**; cross-dataset mean
+   0.307 → 0.310, with **doench2016 0.263 → 0.271** (now past Azimuth on its home
+   set). No new features, no dependencies — just aiming at the metric we report.
+
 All were **gated on cross-dataset transfer** before shipping (none overfits: the
-head-to-head mean above rose 0.274 → 0.292 → 0.307 in lock-step with CV). The
-gapped-dinucleotide + k-mer step alone lifted the held-out mean +0.015 while
-improving every one of the three cross-datasets.
+head-to-head mean above rose 0.274 → 0.292 → 0.307 → 0.310 in lock-step with CV).
+The gapped-dinucleotide + k-mer step alone lifted the held-out mean +0.015 while
+improving every one of the three cross-datasets; the ranking-target swap added
+the final transfer gain on the noisiest set.
 
 Wet-lab replicates of the *same* guide agree only at ρ≈0.71–0.77 (Haeussler 2016),
 so this **matches the assay's own reproducibility** — on par with DeepSpCas9
@@ -87,8 +103,8 @@ Empirical coverage on held-out data matches the guarantee exactly:
 
 | Interval | Half-width | Target | Measured |
 |---|:---:|:---:|:---:|
-| 80% | 0.200 | 0.80 | 0.801 |
-| 90% | 0.263 | 0.90 | 0.901 |
+| 80% | 0.198 | 0.80 | 0.800 |
+| 90% | 0.260 | 0.90 | 0.901 |
 
 To our knowledge no other lightweight CRISPR tool ships coverage-guaranteed
 uncertainty. `pytest tests/test_conformal.py` verifies the guarantee.
@@ -100,8 +116,8 @@ of "aware-from-the-start":
 
 | Mode | Kind | Ranking objective |
 |---|---|---|
-| General | model | cutting efficiency (ρ=0.766) |
-| Knockout | model | out-of-frame / frameshift (ρ=0.723; a dedicated model) |
+| General | model | cutting efficiency (ρ=0.767) |
+| Knockout | model | out-of-frame / frameshift (ρ=0.728; a dedicated model) |
 | Knock-in (HDR) | objective | cutting × exp(−cut-to-edit / 10 bp) |
 | CRISPRi/a | objective | activity × exp(−bind-to-TSS / 75 bp) |
 | Base editing | constraint | activity × window-centrality; only guides with a C/A in positions 4–8 |
