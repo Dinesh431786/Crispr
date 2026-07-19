@@ -134,6 +134,34 @@ def _rank_by(df: pd.DataFrame, fitness) -> pd.DataFrame:
              .drop(columns="_fit").reset_index(drop=True)
 
 
+_STRATEGIES = ("balanced", "conservative", "robust", "optimistic")
+
+
+def _strategy_value(df: pd.DataFrame, strategy: str) -> np.ndarray:
+    """Ranking value = point score adjusted by the guide's conformal uncertainty.
+
+    Turns the calibrated interval into a first-class *ranking* dimension:
+    - balanced     : the ConsensusScore itself (default; uncertainty-agnostic)
+    - conservative : score - half-width  (rank by the pessimistic bound)
+    - robust       : score - 0.5*half-width  (penalise, don't fully subtract)
+    - optimistic   : score + half-width  (rank by the best case)
+
+    With normalized conformal the half-width varies per guide, so these genuinely
+    reorder the list (they collapse to `balanced` only for a constant-width model).
+    """
+    base = df["ConsensusScore"].astype(float).to_numpy()
+    if strategy == "balanced" or "CI_halfwidth" not in df.columns:
+        return base
+    hw = df["CI_halfwidth"].fillna(0.0).astype(float).to_numpy()
+    if strategy == "conservative":
+        return base - hw
+    if strategy == "robust":
+        return base - 0.5 * hw
+    if strategy == "optimistic":
+        return base + hw
+    return base
+
+
 def _base_edit_factor(guide: str, editor: str = "any") -> tuple[float, str]:
     """(centrality factor in [0,1], 'C5,A7' tag) for base-editable targets in the
     activity window. 0 when the guide has no editable base for the chosen editor."""
@@ -158,6 +186,7 @@ def find_gRNAs(
     goal: str = "general",
     target_pos: int | None = None,
     editor: str = "any",
+    ranking_strategy: str = "balanced",
 ) -> pd.DataFrame:
     sequence = dna_seq.upper().replace("\n", "").replace(" ", "")
     pam_len = _pam_len(pam)
@@ -206,6 +235,10 @@ def find_gRNAs(
                 row["CI_low"] = round(ci["low"] * 100)
                 row["CI_high"] = round(ci["high"] * 100)
                 row["CI_level"] = int(ci["coverage"] * 100)
+                # Per-guide conformal half-width (0-1) -> the uncertainty signal
+                # that drives uncertainty-aware ranking. Falls back to the clamped
+                # displayed interval if the model predates normalized conformal.
+                row["CI_halfwidth"] = round(float(ci.get("halfwidth", (ci["high"] - ci["low"]) / 2)), 3)
             guides.append(row)
 
     def _scan(seq: str, strand: str) -> None:
@@ -234,6 +267,11 @@ def find_gRNAs(
         return pd.DataFrame(columns=cols)
     df = pd.DataFrame(guides)
 
+    strategy = ranking_strategy if ranking_strategy in _STRATEGIES else "balanced"
+    # Uncertainty-aware ranking value (composes with the goal-specific factors
+    # below; for 'general' it is the sole sort key). Displayed scores are unchanged.
+    df["RankValue"] = _strategy_value(df, strategy)
+
     # Knock-in (HDR) mode: HDR efficiency falls off sharply with the distance
     # between the Cas9 cut and the intended edit site (~e-fold per ~10 bp), so
     # rank by cutting score weighted by proximity to target_pos. The displayed
@@ -242,7 +280,7 @@ def find_gRNAs(
     if goal == "knockin" and target_pos is not None:
         cut = np.where(df["Strand"] == "+", df["Start"] + guide_length - 3, df["Start"] + 3)
         df["CutDist"] = np.abs(cut - int(target_pos)).astype(int)
-        fitness = df["ConsensusScore"] * np.exp(-df["CutDist"] / 10.0)
+        fitness = df["RankValue"] * np.exp(-df["CutDist"] / 10.0)
         return _rank_by(df, fitness)
 
     # CRISPRi/a: dCas9 binds (does not cut) near the TSS; the effective window is
@@ -250,7 +288,7 @@ def find_gRNAs(
     if goal == "crispri" and target_pos is not None:
         mid = df["Start"] + guide_length // 2
         df["TSSDist"] = np.abs(mid - int(target_pos)).astype(int)
-        fitness = df["ConsensusScore"] * np.exp(-df["TSSDist"] / 75.0)
+        fitness = df["RankValue"] * np.exp(-df["TSSDist"] / 75.0)
         return _rank_by(df, fitness)
 
     # Base editing: only guides with a target base (C for CBE, A for ABE) inside
@@ -262,10 +300,10 @@ def find_gRNAs(
             fac, tag = _base_edit_factor(g, editor)
             facs.append(fac); tags.append(tag)
         df["BE_targets"] = tags
-        fitness = df["ConsensusScore"] * np.array(facs)
+        fitness = df["RankValue"] * np.array(facs)
         return _rank_by(df, fitness)
 
-    return df.sort_values("ConsensusScore", ascending=False).reset_index(drop=True)
+    return df.sort_values("RankValue", ascending=False).reset_index(drop=True)
 
 
 def count_mismatches(a: str, b: str) -> int:

@@ -28,7 +28,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "crispr_app"))
 from benchmark import spearman  # noqa: E402
-from conformal import calibrate, empirical_coverage  # noqa: E402
+from conformal import calibrate, conformal_quantile, empirical_coverage  # noqa: E402
 from features import featurize_many  # noqa: E402
 from train import fit_ridge  # noqa: E402
 
@@ -213,9 +213,32 @@ def main() -> None:
     for level, q in conf.items():
         print(f"  conformal {level}: half-width={q}  coverage={empirical_coverage(cal_pred, y[cal_i], q):.3f}")
 
+    # Normalized (locally-adaptive) conformal: a lightweight sigma-model predicts
+    # each guide's absolute residual, giving a per-guide interval WIDTH. Marginal
+    # coverage is still guaranteed (sigma is fit on the proper-training split, so
+    # the normalized scores on the calibration split stay exchangeable), but now
+    # uncertainty varies per guide -- which makes uncertainty-aware ranking real.
+    mu_tr = np.clip(cal_remap(X[tr_i] @ cal_model.weights + cal_model.intercept), 0, 1)
+    res_tr = np.abs(y[tr_i] - mu_tr)
+    sig_model = fit_ridge(X[tr_i], res_tr, max(args.alpha, 300.0))
+    floor = float(np.median(res_tr)) * 0.5
+    sig_cal = np.maximum(X[cal_i] @ sig_model.weights + sig_model.intercept, floor)
+    qn = {lvl: round(conformal_quantile(np.abs(y[cal_i] - cal_pred) / sig_cal, a), 4)
+          for a, lvl in [(0.20, "q80"), (0.10, "q90")]}
+    normconf = {"weights": sig_model.weights, "intercept": sig_model.intercept,
+                "floor": floor, "q": qn}
+    for lvl in ("q80", "q90"):
+        half = qn[lvl] * sig_cal
+        cov = float(np.mean(np.abs(y[cal_i] - cal_pred) <= half))
+        print(f"  norm-conformal {lvl}: q={qn[lvl]} coverage={cov:.3f} "
+              f"width[min/med/max]={half.min()*2:.3f}/{np.median(half)*2:.3f}/{half.max()*2:.3f}")
+
     final, _, calib = fit_scored(X, y)
     if calib is not None:
         final.calibration = (np.asarray(calib[0]), np.asarray(calib[1]))
+    final.normconformal = {"weights": np.asarray(normconf["weights"], dtype=np.float64),
+                           "intercept": float(normconf["intercept"]),
+                           "floor": float(normconf["floor"]), "q": normconf["q"]}
     final.meta.update({"trained_on": f"CRISPROn/Kim seq_efficiency (n={len(guides)})",
                        "target": f"{column}/100", "goal": args.target,
                        "objective": args.objective,

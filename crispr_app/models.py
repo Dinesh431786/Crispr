@@ -61,7 +61,8 @@ class LinearModel:
     """
 
     def __init__(self, weights: np.ndarray, intercept: float, meta: dict | None = None,
-                 calibration: tuple[np.ndarray, np.ndarray] | None = None):
+                 calibration: tuple[np.ndarray, np.ndarray] | None = None,
+                 normconformal: dict | None = None):
         self.weights = np.asarray(weights, dtype=np.float64)
         self.intercept = float(intercept)
         self.meta = meta or {}
@@ -69,6 +70,25 @@ class LinearModel:
         if calibration is not None:
             xs, ys = calibration
             self.calibration = (np.asarray(xs, dtype=np.float64), np.asarray(ys, dtype=np.float64))
+        # Normalized (locally-adaptive) conformal: a lightweight sigma-model gives
+        # each guide its own interval WIDTH (heteroscedastic), so uncertainty is
+        # guide-specific -- and can drive ranking -- while marginal coverage is
+        # still guaranteed. dict: {weights, intercept, floor, q:{q80,q90}}.
+        self.normconformal = None
+        if normconformal is not None:
+            self.normconformal = {
+                "weights": np.asarray(normconformal["weights"], dtype=np.float64),
+                "intercept": float(normconformal["intercept"]),
+                "floor": float(normconformal["floor"]),
+                "q": {k: float(v) for k, v in normconformal["q"].items()},
+            }
+
+    def sigma(self, x: np.ndarray) -> float:
+        """Per-guide uncertainty scale (floored), or None if not calibrated."""
+        nc = self.normconformal
+        if nc is None:
+            return None
+        return max(float(x @ nc["weights"] + nc["intercept"]), nc["floor"])
 
     def predict(self, guide: str, ngg_context: str | None = None,
                 up: str = "", down: str = "") -> float:
@@ -84,6 +104,10 @@ class LinearModel:
         d = {"weights": self.weights.tolist(), "intercept": self.intercept, "meta": self.meta}
         if self.calibration is not None:
             d["calibration"] = {"x": self.calibration[0].tolist(), "y": self.calibration[1].tolist()}
+        if self.normconformal is not None:
+            nc = self.normconformal
+            d["normconformal"] = {"weights": nc["weights"].tolist(), "intercept": nc["intercept"],
+                                  "floor": nc["floor"], "q": nc["q"]}
         return d
 
     @classmethod
@@ -91,7 +115,7 @@ class LinearModel:
         c = data.get("calibration")
         calib = (c["x"], c["y"]) if c else None
         return cls(np.array(data["weights"], dtype=np.float64), data["intercept"],
-                   data.get("meta", {}), calib)
+                   data.get("meta", {}), calib, data.get("normconformal"))
 
     def save(self, path: str) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -215,13 +239,21 @@ def predict_interval(guide: str, ngg_context: str | None = None, level: str = "q
     lm = _goal_model(goal)
     if lm is None or active_backend() == "onnx":
         return None
-    conf = (lm.meta or {}).get("conformal") or {}
-    if level not in conf:
-        return None
     point = lm.predict(guide, ngg_context, up, down)
-    lo, hi = _conf_interval(point, float(conf[level]))
+    # Prefer the normalized (per-guide width) interval when the model ships it;
+    # fall back to the classic constant-width conformal quantile otherwise.
+    nc = lm.normconformal
+    if nc is not None and level in nc["q"]:
+        sig = lm.sigma(featurize(guide, ngg_context, up, down))
+        half = nc["q"][level] * sig
+    else:
+        conf = (lm.meta or {}).get("conformal") or {}
+        if level not in conf:
+            return None
+        half = float(conf[level])
+    lo, hi = _conf_interval(point, half)
     return {"point": point, "low": lo, "high": hi, "level": level,
-            "coverage": int(level[1:]) / 100.0}
+            "coverage": int(level[1:]) / 100.0, "halfwidth": round(float(half), 3)}
 
 
 def reset_caches() -> None:

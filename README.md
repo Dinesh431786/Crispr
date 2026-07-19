@@ -22,7 +22,7 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 
 ## 📸 The interface
 
-![CRISPR Precision Studio UI](docs/ui.png?v=dcdedcb4)
+![CRISPR Precision Studio UI](docs/ui.png?v=0f464998)
 
 <sub>Rendered automatically by CI on every push — one **Score** per guide, with a per-feature **Details** breakdown.</sub>
 
@@ -58,7 +58,8 @@ account and no API keys.
 |---|---|---|
 | 🎯 | **Goal-aware ranking** | Pick your intent — *General* (cutting) · *Knockout* (frameshift model) · *Knock-in/HDR* (cut-proximity) · *CRISPRi/a* (TSS-proximity) · *Base editing* (ABE/CBE target in window) — and guides are ranked by the outcome you actually want, each with a plain-language verdict fusing efficiency + specificity + uncertainty. |
 | 🔍 | **Explainable** | Per-feature breakdown shown *by default*; plus an informational self-folding (secondary-structure) QC flag. |
-| 📐 | **Calibrated uncertainty** | Distribution-free **conformal** confidence interval per guide — *verified* 90% coverage. |
+| 📐 | **Calibrated uncertainty** | Distribution-free **conformal** confidence interval per guide — *verified* 90% coverage, with **per-guide adaptive width** (normalized conformal). |
+| ⚖️ | **Uncertainty-aware ranking** | Rank by *balanced*, *conservative* (pessimistic CI bound), *robust* (uncertainty-penalised), or *optimistic* — turn the interval into a decision, not just a display. |
 | 🧬 | **Both-strand off-targets** | Vectorised NumPy scan + per-site **CFD** & **MIT/Hsu** + aggregate specificity. |
 | 🌍 | **Genome-wide search** | Stream any (multi-chromosome) FASTA; memory-safe chunked scan, both strands. |
 | 🧫 | **Edit-outcome simulation** | Predict the protein consequence of a cut — frameshift, stop loss, indel panel. |
@@ -167,6 +168,23 @@ uncertainty explicit so a researcher doesn't over-trust a single number. To our
 knowledge no other lightweight CRISPR guide tool ships calibrated, coverage-
 guaranteed uncertainty.
 
+**Per-guide adaptive width (normalized conformal).** A lightweight sigma-model
+gives every guide its *own* interval width — a hard-to-call guide gets a wider
+band than an easy one — while marginal coverage stays guaranteed (0.800 / 0.901
+verified). This makes the uncertainty **actionable as a ranking dimension**:
+
+| Ranking | Sorts by | Use when |
+|---|---|---|
+| **Balanced** | the point score | default |
+| **Conservative** | score − CI half-width (pessimistic bound) | "even the worst case must be strong" |
+| **Robust** | score − ½·half-width | penalise, don't fully discount, uncertainty |
+| **Optimistic** | score + CI half-width (best case) | exploratory / willing to gamble |
+
+Because the width varies per guide, a high-but-uncertain guide is genuinely
+demoted under *conservative* in favour of a slightly-lower-but-tighter one — the
+ordering really changes (it is not a re-label of the same list). Pick it from the
+UI **Ranking** dropdown or pass `ranking_strategy` to `POST /api/design`.
+
 ---
 
 ## 📊 Accuracy — measured vs the field (not asserted)
@@ -268,7 +286,7 @@ Browser renders one ranked table
 | Method & route | Purpose |
 |---|---|
 | `GET /health` | liveness check |
-| `POST /api/design` | ranked gRNAs; each carries `ConsensusScore` in **0–1** (the UI displays it ×100 as the 0–100 Score) |
+| `POST /api/design` | ranked gRNAs; each carries `ConsensusScore` in **0–1** (the UI displays it ×100) + a per-guide `CI_low`/`CI_high`/`CI_halfwidth`. Optional `ranking_strategy`: `balanced`\|`conservative`\|`robust`\|`optimistic` |
 | `POST /api/offtargets` | per-site CFD/MIT hits + per-guide specificity (pasted background) |
 | `POST /api/offtargets-genome` | genome-wide scan over a (multi-record) FASTA, both strands |
 | `POST /api/simulate` | protein / indel outcome of an edit |

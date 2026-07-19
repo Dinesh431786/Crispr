@@ -101,13 +101,26 @@ python scripts/build_default_model.py --data DeepCRISTL/CRISPROn/data/main_dataf
 Every score ships with a distribution-free split-conformal interval (Lei 2018).
 Empirical coverage on held-out data matches the guarantee exactly:
 
-| Interval | Half-width | Target | Measured |
+| Interval | Median half-width | Target | Measured |
 |---|:---:|:---:|:---:|
-| 80% | 0.198 | 0.80 | 0.800 |
-| 90% | 0.260 | 0.90 | 0.901 |
+| 80% | 0.20 | 0.80 | 0.800 |
+| 90% | 0.27 | 0.90 | 0.901 |
 
-To our knowledge no other lightweight CRISPR tool ships coverage-guaranteed
-uncertainty. `pytest tests/test_conformal.py` verifies the guarantee.
+**Normalized (locally-adaptive) conformal.** Width is *per-guide*, not constant:
+a lightweight NumPy sigma-model predicts each guide's residual scale, so a
+hard-to-call guide gets a wider band than an easy one. Marginal coverage is still
+guaranteed — sigma is fit on the proper-training split, so the normalized scores
+on the calibration split stay exchangeable — and verified at 0.800 / 0.901. The
+80% interval width ranges ~0.16–0.72 across guides (constant-width conformal would
+give a single 0.40). This variation is what makes **uncertainty-aware ranking**
+real: `conservative` (score − half-width), `robust` (score − ½·half-width), and
+`optimistic` (score + half-width) genuinely reorder the list — a high-but-uncertain
+guide is demoted below a slightly-lower-but-tighter one. With a constant width they
+would all collapse to `balanced`. `pytest tests/test_conformal.py
+tests/test_ranking.py` verifies both the coverage guarantee and the reordering.
+
+To our knowledge no other lightweight CRISPR tool ships coverage-guaranteed,
+per-guide uncertainty *or* turns it into a ranking dimension.
 
 ## Goal-aware ranking (five modes)
 

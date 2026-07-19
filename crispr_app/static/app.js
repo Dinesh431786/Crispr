@@ -381,6 +381,7 @@ $("designBtn").onclick = async () => {
       min_gc: Number($("minGc").value),
       max_gc: Number($("maxGc").value),
       goal: lastGoal,
+      ranking_strategy: $("rankStrategy").value,
     };
     if (lastGoal === "knockin" || lastGoal === "crispri") payload.target_pos = Number($("targetPos").value);
     if (lastGoal === "baseedit") payload.editor = $("editor").value;
@@ -396,7 +397,12 @@ $("designBtn").onclick = async () => {
       crispri: "CRISPRi/a fitness (activity × proximity to TSS)",
       baseedit: "base-editability (target base in window × activity)",
     }[data.goal] || "cutting efficiency";
-    setStatus($("guideSummary"), `Designed ${data.count} candidate guides — ranked by ${goalLbl}, showing top ${Math.min(lastGuides.length, 100)}.`);
+    const stratLbl = {
+      conservative: " · conservative order (pessimistic CI bound)",
+      robust: " · robust order (uncertainty-penalised)",
+      optimistic: " · optimistic order (best-case CI bound)",
+    }[data.ranking_strategy] || "";
+    setStatus($("guideSummary"), `Designed ${data.count} candidate guides — ranked by ${goalLbl}${stratLbl}, showing top ${Math.min(lastGuides.length, 100)}.`);
     $("exportGuidesBtn").disabled = !lastGuides.length;
     $("offBtn").disabled = !lastGuides.length;
     $("baseBtn").disabled = !lastGuides.length;

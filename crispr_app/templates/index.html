@@ -100,6 +100,14 @@
               <option value="ABE">ABE (A→G)</option>
             </select>
           </label>
+          <label title="Turn the calibrated confidence interval into a ranking dimension">Ranking
+            <select id="rankStrategy">
+              <option value="balanced">Balanced — by score</option>
+              <option value="conservative">Conservative — pessimistic bound</option>
+              <option value="robust">Robust — penalise uncertainty</option>
+              <option value="optimistic">Optimistic — best-case bound</option>
+            </select>
+          </label>
           <label>PAM / enzyme
             <select id="pam">
               <option value="NGG">SpCas9 · NGG</option>

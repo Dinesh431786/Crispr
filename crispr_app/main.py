@@ -72,6 +72,9 @@ class DesignRequest(BaseModel):
     goal: str = "general"   # general | knockout | knockin | crispri | baseedit
     target_pos: int | None = Field(None, ge=0)   # edit site (knock-in) or TSS (CRISPRi/a)
     editor: str = "any"     # base-edit: "ABE" | "CBE" | "any"
+    # Uncertainty-aware ranking: balanced (point score) | conservative (pessimistic
+    # bound) | robust (uncertainty-penalised) | optimistic (best case).
+    ranking_strategy: str = "balanced"
 
 
 class OffTargetRequest(BaseModel):
@@ -109,6 +112,8 @@ def design_guides(payload: DesignRequest):
         raise HTTPException(status_code=400, detail=cleaned)
 
     goal = payload.goal if payload.goal in ("general", "knockout", "knockin", "crispri", "baseedit") else "general"
+    strategy = payload.ranking_strategy if payload.ranking_strategy in (
+        "balanced", "conservative", "robust", "optimistic") else "balanced"
     guides = find_gRNAs(
         cleaned,
         pam=payload.pam,
@@ -119,6 +124,7 @@ def design_guides(payload: DesignRequest):
         goal=goal,
         target_pos=payload.target_pos,
         editor=payload.editor if payload.editor in ("ABE", "CBE", "any") else "any",
+        ranking_strategy=strategy,
     )
 
     # Confidence intervals (flank-aware, goal-appropriate) are computed in
@@ -128,6 +134,7 @@ def design_guides(payload: DesignRequest):
         "count": int(len(guides)),
         "model": active_backend(),
         "goal": goal,
+        "ranking_strategy": strategy,
         "top_guides": top,
     }
 
