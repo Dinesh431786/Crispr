@@ -53,6 +53,33 @@ def spearman(x, y) -> float:
     return pearson(_rankdata(np.asarray(x, dtype=float)), _rankdata(np.asarray(y, dtype=float)))
 
 
+def auc(scores, labels) -> float:
+    """Rank-based ROC-AUC (Mann-Whitney U), NumPy-only, ties handled by average rank.
+
+    ``labels`` is a 0/1 array. Measures how well ``scores`` separate the two
+    classes — the honest metric for the tool's real job (telling effective guides
+    from ineffective ones), which is far less noise-limited than rank correlation
+    over every guide including the ambiguous middle.
+    """
+    scores = np.asarray(scores, dtype=float)
+    labels = np.asarray(labels).astype(int)
+    npos = int((labels == 1).sum())
+    nneg = int((labels == 0).sum())
+    if npos == 0 or nneg == 0:
+        return float("nan")
+    r = _rankdata(scores)
+    return float((r[labels == 1].sum() - npos * (npos + 1) / 2) / (npos * nneg))
+
+
+def separation_auc(preds, measured, lo_pct: float = 33.0, hi_pct: float = 67.0) -> float:
+    """AUC for separating high- from low-efficiency guides (top vs bottom slice)."""
+    preds = np.asarray(preds, dtype=float)
+    measured = np.asarray(measured, dtype=float)
+    ql, qh = np.percentile(measured, [lo_pct, hi_pct])
+    mask = (measured <= ql) | (measured >= qh)
+    return auc(preds[mask], (measured[mask] >= qh).astype(int))
+
+
 def evaluate(records: list[dict], predictor=on_target_score) -> dict:
     """Score a labelled dataset and return correlation metrics.
 

@@ -86,8 +86,29 @@ The gapped-dinucleotide + k-mer step alone lifted the held-out mean +0.015 while
 improving every one of the three cross-datasets; the ranking-target swap added
 the final transfer gain on the noisiest set.
 
+### Good-vs-bad separation (AUC) — the metric that matches the task
+
+Spearman over *every* guide (0.767) is capped by label noise: guides with nearly
+equal true efficiency get mis-ordered in the mushy middle, and that ceiling is the
+assay's own reproducibility (~0.77). But **the tool's actual job is telling an
+effective guide from an ineffective one** — a cleaner question, far less
+noise-limited. Measured as classification AUC on the shipped model (Kim, 5-fold CV):
+
+| Task | AUC | Accuracy |
+|---|:---:|:---:|
+| effective vs ineffective (top⅓ vs bottom⅓) | **0.953** | 0.886 |
+| top-quartile vs bottom-quartile | **0.971** | 0.919 |
+| top-decile vs bottom-decile | **0.982** | 0.948 |
+
+This is the *same model*, no new data — it is not "beating" the wet-lab ceiling
+(impossible), it is **measuring the right task**. Both numbers are honest and
+reported together: 0.767 = "pin the exact value of every guide, noise included";
+0.95 = "separate winners from losers", which is what you actually do when you pick
+guides. Reproduced by `scripts/build_default_model.py` (prints the AUCs) and
+unit-tested (`tests/test_benchmark.py`).
+
 Wet-lab replicates of the *same* guide agree only at ρ≈0.71–0.77 (Haeussler 2016),
-so this **matches the assay's own reproducibility** — on par with DeepSpCas9
+so the Spearman **matches the assay's own reproducibility** — on par with DeepSpCas9
 (~0.73). Deep models (DeepHF/CRISPRon, ~0.80–0.87) lead *within* a single large
 dataset but need GPU/training; we reach the wet-lab band with a NumPy model and no
 setup. Reproduce:

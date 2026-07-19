@@ -27,7 +27,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "crispr_app"))
-from benchmark import spearman  # noqa: E402
+from benchmark import separation_auc, spearman  # noqa: E402
 from conformal import calibrate, conformal_quantile, empirical_coverage  # noqa: E402
 from features import featurize_many  # noqa: E402
 from train import fit_ridge  # noqa: E402
@@ -200,6 +200,12 @@ def main() -> None:
         pred[te] = X[te] @ m.weights + m.intercept
     rho = spearman(pred, y)
     print(f"  5-fold CV Spearman = {rho:.3f}  (wet-lab replicate band ~0.71-0.77)")
+    # The tool's real job is separating effective from ineffective guides; that
+    # cleaner task (AUC) is far less noise-limited than Spearman over every guide.
+    auc33 = separation_auc(pred, y, 33, 67)
+    auc25 = separation_auc(pred, y, 25, 75)
+    auc10 = separation_auc(pred, y, 10, 90)
+    print(f"  good-vs-bad AUC: top/bottom third={auc33:.3f}  quartiles={auc25:.3f}  deciles={auc10:.3f}")
 
     # Split-conformal calibration on a held-out split (model never saw it), on the
     # efficiency scale (after the remap) so intervals stay in efficiency units.

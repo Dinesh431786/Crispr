@@ -2,8 +2,25 @@ import math
 
 import pytest
 
-from crispr_app.benchmark import evaluate, load_crispor_context, pearson, spearman
+from crispr_app.benchmark import auc, evaluate, load_crispor_context, pearson, separation_auc, spearman
 from crispr_app.scoring import score_breakdown
+
+
+def test_auc_perfect_and_random():
+    # Perfectly separating scores -> AUC 1.0; reversed -> 0.0.
+    assert auc([0.1, 0.2, 0.8, 0.9], [0, 0, 1, 1]) == pytest.approx(1.0)
+    assert auc([0.9, 0.8, 0.2, 0.1], [0, 0, 1, 1]) == pytest.approx(0.0)
+
+
+def test_auc_single_class_is_nan():
+    assert math.isnan(auc([0.1, 0.2, 0.3], [1, 1, 1]))
+
+
+def test_separation_auc_matches_ranking():
+    # Predictions that rank-align with truth separate top/bottom perfectly.
+    preds = list(range(100))
+    measured = list(range(100))
+    assert separation_auc(preds, measured, 33, 67) == pytest.approx(1.0)
 
 
 def test_spearman_perfect_monotonic():

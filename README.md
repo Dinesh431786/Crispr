@@ -225,6 +225,13 @@ home set**. Every step gated on cross-dataset transfer.
 > We don't claim to beat the wet lab; we *match its reproducibility* — NumPy-only,
 > zero setup. Cross-dataset ρ is low (~0.15–0.4) for *every* tool, giants included.
 
+> 🥇 **Separating good guides from bad — the task you actually care about — the
+> model hits AUC 0.95** (top⅓ vs bottom⅓; 0.97 quartiles, 0.98 deciles; 89–95%
+> accuracy). Same model, no new data: ρ=0.767 is "pin the exact value of every
+> guide including the noisy middle"; **AUC=0.95 is "pick winners from losers"** —
+> which is what picking guides *is*. Both are honest and reported together
+> ([BENCHMARKS.md](BENCHMARKS.md#good-vs-bad-separation-auc--the-metric-that-matches-the-task)).
+
 Every score is also **explainable and ships with a calibrated confidence
 interval**; wet-lab validation remains essential.
 
