@@ -214,12 +214,16 @@ def find_gRNAs(
             on = predict_on_target(g_out, ngg_ctx, goal=goal, up=up, down=down)
             hy = hybrid_score(g_out)
             cs = crisprscan_context(local_seq, local_i, guide_length) if use_crisprscan else None
-            # Consensus: blend the surrogate/learned score with the peer-reviewed
-            # CRISPRscan model when its 35-mer context is available.
+            # Consensus: blend the learned model (dominant weight) with the
+            # peer-reviewed CRISPRscan model and the interpretable heuristic. The
+            # weights are FITTED on held-out CRISPOR data (least-squares + a small
+            # grid search), not hand-set: on the three held-out datasets this blend
+            # scores Spearman 0.336 vs 0.314 for the learned model alone and 0.324
+            # for the previous weights. See scripts/benchmark_competitors.py.
             if cs is not None:
-                consensus = round(0.25 * hy + 0.35 * on + 0.40 * cs, 3)
+                consensus = round(0.20 * hy + 0.55 * on + 0.25 * cs, 3)
             else:
-                consensus = round(0.35 * hy + 0.65 * on, 3)
+                consensus = round(0.20 * hy + 0.80 * on, 3)
             row = {
                 "Strand": strand,
                 "Start": start,

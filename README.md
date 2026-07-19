@@ -22,7 +22,11 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 
 ## 📸 The interface
 
+<<<<<<< HEAD
 ![CRISPR Precision Studio UI](docs/ui.png?v=f00c1d32)
+=======
+![CRISPR Precision Studio UI](docs/ui.png)
+>>>>>>> 43ae0c7 (Validate features, fit the blend, name the ceiling, cut CI friction, add citability)
 
 <sub>Rendered automatically by CI on every push — one **Score** per guide, with a per-feature **Details** breakdown.</sub>
 
@@ -122,9 +126,9 @@ Real output → 21 guides found. Top 3 (the API returns `ConsensusScore` in 0–
 
 | # | Guide (5′→3′) | PAM | Strand | GC% | Score | `ConsensusScore` |
 |---|---|:---:|:---:|:---:|:---:|:---:|
-| 1 | `AAGGTGTGGGTCGCGGACGA` | CGG | + | 65 | **73** | 0.734 |
-| 2 | `GATGTGGCGGTCCGGATCGA` | CGG | − | 65 | **73** | 0.730 |
-| 3 | `GCTCGACATCGGCAAGGTGT` | GGG | + | 60 | **70** | 0.697 |
+| 1 | `GCTCGACATCGGCAAGGTGT` | GGG | + | 60 | **71** | 0.712 |
+| 2 | `AAGGTGTGGGTCGCGGACGA` | CGG | + | 65 | **70** | 0.697 |
+| 3 | `GATGTGGCGGTCCGGATCGA` | CGG | − | 65 | **68** | 0.684 |
 
 `POST /api/explain` then returns the per-feature breakdown (GC, T<sub>m</sub>, position-specific contributions) **and the calibrated confidence interval** behind any guide's score.
 
@@ -227,6 +231,15 @@ home set**. Every step gated on cross-dataset transfer.
 
 Every score is also **explainable and ships with a calibrated confidence
 interval**; wet-lab validation remains essential.
+
+> **The real frontier (and why we stop here).** Cross-dataset ρ (~0.31) is capped
+> by *information*, not modeling: editing efficiency in a living cell depends on
+> **chromatin accessibility** — is the target even open? — which a 20-nt sequence
+> cannot contain. We measured this directly: added features, kernels, and a trained
+> MLP all plateau at the sequence ceiling ([BENCHMARKS.md](BENCHMARKS.md#methods-tested-and-not-shipped-measured-nulls)).
+> The honest next lever is epigenomic context (ATAC-seq/DNase), which would break
+> the lightweight, sequence-only, zero-setup promise. We deliberately stay on this
+> side of that line and say so, rather than chase +0.001s that don't move real use.
 
 ### Train a stronger model (NumPy-only, no heavy ML stack)
 
@@ -356,12 +369,41 @@ For a target base substitution, `prime.py` enumerates and ranks candidate pegRNA
 
 ```bash
 pip install pytest
-python -m pytest tests/ -q     # 45 passing
+python -m pytest tests/ -q     # all passing
 ```
 
 Covers on-target scoring, CFD/MIT scoring, aggregate specificity, both-strand
-off-target detection, pegRNA design, the model registry & trainer, CRISPRscan
-reference-vector validation, performance, and dependency hygiene.
+off-target detection, pegRNA + structure scoring, base-edit purity, multiplex
+selection, uncertainty-aware ranking, the indel spectrum, what-if sensitivity,
+the model registry & trainer, CRISPRscan reference-vector validation, end-to-end
+API smoke tests, performance, and dependency hygiene.
+
+---
+
+## 🔁 Reproduce every number
+
+Nothing here is asserted — each headline figure has a one-command reproduction.
+
+```bash
+# On-target accuracy (rho=0.767, 5-fold CV) + conformal calibration:
+git clone --depth 1 https://github.com/OrensteinLab/DeepCRISTL
+python scripts/build_default_model.py --data DeepCRISTL/CRISPROn/data/main_dataframes/seq_efficienciey.txt
+
+# Head-to-head vs 6 industry tools on identical guides (#1 cross-dataset mean 0.310):
+git clone --depth 1 https://github.com/maximilianh/crisporPaper
+python scripts/benchmark_competitors.py --effdata crisporPaper/effData
+
+# Frameshift predictor validated against the trained Lindel model (rho=0.54, n=6058):
+git clone --depth 1 https://github.com/shendurelab/Lindel
+python scripts/validate_indel_spectrum.py --lindel Lindel --effdata crisporPaper/effData
+
+# Conformal coverage guarantee + all module unit/behaviour tests:
+python -m pytest tests/ -q
+```
+
+Full method notes and honest scope for every feature are in
+**[BENCHMARKS.md](BENCHMARKS.md)** — including the **measured nulls** (things we
+tried, that didn't help, and removed).
 
 ---
 

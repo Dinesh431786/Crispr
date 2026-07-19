@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+message: "If you use CRISPR Precision Studio, please cite it as below."
+title: "CRISPR Precision Studio"
+abstract: >-
+  A lightweight, fully transparent CRISPR guide-design platform: one explainable
+  0-100 on-target score per guide with a calibrated (normalized-conformal)
+  confidence interval, uncertainty-aware ranking, both-strand off-target analysis
+  (CFD + MIT/Hsu), base editing, prime editing, multiplex library design, and a
+  sequence-derived repair-outcome spectrum — pure NumPy, no GPU, no cloud, no API
+  keys. Every reported number is measured and reproducible.
+type: software
+authors:
+  # TODO: confirm/complete author details before citing.
+  - given-names: Dinesh
+    family-names: K.
+    email: dinesh.k@voxelta.com
+    alias: Dinesh431786
+repository-code: "https://github.com/Dinesh431786/Crispr"
+license: MIT
+version: "1.0.0"
+keywords:
+  - CRISPR
+  - guide RNA design
+  - on-target efficiency
+  - conformal prediction
+  - base editing
+  - prime editing
+references:
+  - type: article
+    title: "Optimized sgRNA design to maximize activity and minimize off-target effects of CRISPR-Cas9 (Rule Set 2 / Azimuth)"
+    authors: [{family-names: Doench, given-names: "John G."}]
+    journal: "Nature Biotechnology"
+    year: 2016
+  - type: article
+    title: "CRISPRscan: designing highly efficient sgRNAs for CRISPR-Cas9 targeting in vivo"
+    authors: [{family-names: Moreno-Mateos, given-names: "Miguel A."}]
+    journal: "Nature Methods"
+    year: 2015
+  - type: article
+    title: "Distribution-Free Predictive Inference for Regression (split conformal)"
+    authors: [{family-names: Lei, given-names: Jing}]
+    journal: "Journal of the American Statistical Association"
+    year: 2018

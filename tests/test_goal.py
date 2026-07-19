@@ -52,9 +52,16 @@ def test_knockin_ranks_by_proximity():
 
 
 def test_crispri_ranks_near_tss():
-    df = find_gRNAs(SEQ, pam="NGG", goal="crispri", target_pos=50)
+    # Use a longer target so there are guides on both sides of the TSS (the short
+    # SEQ has too few, sparsely placed, to test proximity meaningfully).
+    long_seq = SEQ + ("GCCGCGGTGGCGGTCTGGACCACGCCGGAGAGCGTCGAAGCGGGGGCGGTGTTCGCC"
+                      "GAGATCGGCCCGCGCATGGCCGAGTACAAGCCCACGGTGCGCCTCGCC")
+    df = find_gRNAs(long_seq, pam="NGG", goal="crispri", target_pos=140)
     assert "TSSDist" in df.columns
-    assert df.head(5)["TSSDist"].mean() < df["TSSDist"].mean()  # top cluster near TSS
+    # The proximity weighting pulls near-TSS guides up: the top cluster is clearly
+    # closer to the TSS than the overall set, and the #1 guide is in the near half.
+    assert df.head(5)["TSSDist"].mean() < df["TSSDist"].mean()
+    assert df.iloc[0]["TSSDist"] <= df["TSSDist"].median()
 
 
 def test_baseedit_prioritizes_editable_guides():

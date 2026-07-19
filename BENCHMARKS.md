@@ -175,7 +175,21 @@ deletion-length decay, Bae et al. 2014-style) and the **templated +1 insertion**
 **out-of-frame / frameshift probability** (the knockout-relevant number) and a
 premature-stop probability. Honest scope: these are *relative* propensities over
 predictable channels, not calibrated absolute rates — a full locus-specific
-spectrum needs a trained model (inDelphi / Lindel / FORECasT). Unit-tested.
+spectrum needs a trained model (inDelphi / Lindel / FORECasT).
+
+**Validated against Lindel.** On 6,058 held-out sites (from three CRISPOR
+datasets' genomic context) our frameshift probability agrees with the trained
+deep **Lindel** model (Chen et al. 2019) at **Spearman ρ = 0.54** (0.49–0.57
+per dataset) — the same "agree with the field-standard tool on identical inputs"
+test we use for on-target. We under-predict the *absolute* frameshift rate
+(mean 0.66 vs Lindel's 0.76) because we cover only the two dominant predictable
+channels; it is the *ranking* that is validated. Respectable for a pure-NumPy
+sequence heuristic vs a trained model, and honest about the gap. Reproduce:
+```bash
+git clone --depth 1 https://github.com/shendurelab/Lindel
+python scripts/validate_indel_spectrum.py --lindel Lindel --effdata crisporPaper/effData
+```
+Unit-tested (`tests/test_indel_spectrum.py`).
 
 **pegRNA 3′-extension structure.** The pegRNA extension (RTT+PBS) must stay
 single-stranded to prime; a self-folding extension can't. We add a dependency-free
