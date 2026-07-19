@@ -157,13 +157,30 @@ off-target data is available. Unit-tested (`tests/test_base_edit.py`).
 Selects a set that is individually strong *and* collectively diverse. At each
 step it adds the guide maximising `marginal_gain = ranking_value − diversity ×
 max_identity_to_selected`, where identity is the position-wise sequence identity
-to an already-chosen guide (a recombination-risk proxy); optional `min_spacing`
+to an already-chosen guide (the direct driver of homologous recombination); optional `min_spacing`
 forbids cut sites within N bp. Every pick reports its marginal gain and why it was
 chosen, and the set reports mean score, mean pairwise diversity, and max pairwise
 identity. Honest scope: greedy is not guaranteed optimal (a global ILP could do
-marginally better) and diversity here is a *sequence* proxy — genome-wide
+marginally better) and diversity here is measured on the *guide sequences* — genome-wide
 off-target-aware selection layers on the existing CFD/MIT machinery when a
 background is supplied. Unit-tested (`tests/test_multiplex.py`).
+
+## Repair-outcome spectrum (sequence-derived) & prime-editing structure
+
+**Indel spectrum (`/api/simulate`).** At a cut we predict the two dominant
+*sequence-derivable* repair channels: **MMEJ deletions** from microhomologies
+flanking the cut (searched within ±20 bp, weighted by microhomology length/GC and
+deletion-length decay, Bae et al. 2014-style) and the **templated +1 insertion**
+(Cas9 duplicates the base 5′ of the cut). We report relative frequencies, an
+**out-of-frame / frameshift probability** (the knockout-relevant number) and a
+premature-stop probability. Honest scope: these are *relative* propensities over
+predictable channels, not calibrated absolute rates — a full locus-specific
+spectrum needs a trained model (inDelphi / Lindel / FORECasT). Unit-tested.
+
+**pegRNA 3′-extension structure.** The pegRNA extension (RTT+PBS) must stay
+single-stranded to prime; a self-folding extension can't. We add a dependency-free
+Nussinov max-base-pairing penalty (`ExtStructure`) to the PRIDICT2.0-informed
+score — a structure *propensity*, not an RNAfold ΔG. Unit-tested.
 
 ## The prediction ceiling (why not higher)
 

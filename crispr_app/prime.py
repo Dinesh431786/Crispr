@@ -26,11 +26,31 @@ import pandas as pd
 from Bio.Seq import Seq
 from Bio.SeqUtils import MeltingTemp as mt
 
+try:
+    from structure import max_base_pairs
+except ImportError:  # pragma: no cover
+    from .structure import max_base_pairs
+
 PBS_TM_OPTIMUM = 37.0       # deg C (PRIDICT2.0)
 PBS_TM_TOLERANCE = 7.0
 PBS_LEN_OPTIMUM = 13
 RTT_LEN_OPTIMUM = 12
 MIN_3PRIME_HOMOLOGY = 3     # nt of RTT downstream of the edit
+
+
+def _fold_propensity(seq: str) -> float:
+    """Secondary-structure propensity in [0, 1] of the pegRNA 3' extension.
+
+    The extension (RTT+PBS) must stay single-stranded to prime reverse
+    transcription; a strongly self-folding extension sequesters the PBS/RTT and
+    lowers editing. Computed with the dependency-free Nussinov maximum-base-pairing
+    routine (Watson-Crick + G.U wobble), normalised by the max nestable pairs.
+    Lightweight structure propensity, not an RNAfold free energy.
+    """
+    n = len(seq)
+    if n < 6:
+        return 0.0
+    return min(1.0, max_base_pairs(seq.upper()) / (n // 2))
 
 
 def _sigmoid(x: float) -> float:
@@ -46,8 +66,9 @@ def _pbs_tm(seq: str) -> float:
 
 
 def _peg_score(pbs_tm: float, pbs_len: int, rtt_len: int,
-               edit_pos_in_rtt: int, rtt_seq: str) -> float:
-    """Calibrated pegRNA score in [0, 1] from PRIDICT2.0-informed determinants."""
+               edit_pos_in_rtt: int, rtt_seq: str, fold: float = 0.0) -> float:
+    """Calibrated pegRNA score in [0, 1] from PRIDICT2.0-informed determinants
+    plus a lightweight 3'-extension secondary-structure penalty."""
     logit = 0.6
 
     # PBS Tm Gaussian reward around 37 deg C.
@@ -67,9 +88,12 @@ def _peg_score(pbs_tm: float, pbs_len: int, rtt_len: int,
     if rtt_seq and rtt_seq[0] == "C":
         logit -= 0.5
 
-    # Moderate PBS GC content (proxy via Tm already, light extra term on RTT GC).
+    # Centre RTT GC content near ~55% (extreme GC destabilises flap resolution).
     gc = (rtt_seq.count("G") + rtt_seq.count("C")) / max(len(rtt_seq), 1)
     logit -= 1.0 * (gc - 0.55) ** 2
+
+    # Secondary-structure penalty: a self-folding 3' extension can't prime well.
+    logit -= 1.1 * fold
 
     return round(_sigmoid(logit), 3)
 
@@ -122,6 +146,8 @@ def design_prime_editing_pegRNAs(
                 rtt_list[edit_idx_in_rtt] = desired_edit
                 edited_rtt_seq = "".join(rtt_list)
 
+                extension = edited_rtt_seq + pbs_seq
+                fold = _fold_propensity(extension)
                 results.append({
                     "Spacer": spacer,
                     "PAM": pam,
@@ -132,9 +158,10 @@ def design_prime_editing_pegRNAs(
                     "RTT_Len": rtt_len,
                     "RTT_Seq": edited_rtt_seq,
                     "EditPosInRTT": edit_idx_in_rtt,
-                    "Extension": edited_rtt_seq + pbs_seq,
+                    "Extension": extension,
+                    "ExtStructure": round(fold, 3),
                     "Score": _peg_score(pbs_tm, pbs_len, rtt_len,
-                                        edit_idx_in_rtt, edited_rtt_seq),
+                                        edit_idx_in_rtt, edited_rtt_seq, fold),
                 })
 
     df = pd.DataFrame(results)

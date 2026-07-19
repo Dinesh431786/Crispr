@@ -1,4 +1,5 @@
 from crispr_app.analysis import design_prime_editing_pegRNAs
+from crispr_app.prime import _fold_propensity, _peg_score
 
 def test_design_prime_editing_pegRNAs():
     # Sequence with a PAM near a target
@@ -22,3 +23,22 @@ def test_design_prime_editing_pegRNAs():
     for _, row in df.iterrows():
         if row["NickPos"] == 17:
             assert row["RTT_Seq"][13] == "C"
+
+
+def test_extension_structure_scored():
+    seq = "GCTAGCTAGCTAGCTAGCTATGG" + "A" * 50
+    df = design_prime_editing_pegRNAs(seq, 30, "C")
+    assert "ExtStructure" in df.columns
+    assert (df["ExtStructure"] >= 0).all() and (df["ExtStructure"] <= 1).all()
+
+
+def test_fold_propensity_penalises_hairpin():
+    # A clear hairpin (self-complementary) folds; a low-complexity run does not.
+    assert _fold_propensity("GGGGGAAAAACCCCC") > _fold_propensity("ACACACACACACACA")
+
+
+def test_structure_penalty_lowers_score():
+    # Identical determinants, only the extension-fold differs -> higher fold, lower score.
+    lo = _peg_score(37.0, 13, 12, 3, "ACGTACGTACGT", fold=0.0)
+    hi = _peg_score(37.0, 13, 12, 3, "ACGTACGTACGT", fold=0.8)
+    assert hi < lo

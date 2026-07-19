@@ -13,6 +13,7 @@ so the FastAPI layer is unchanged.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -311,8 +312,9 @@ def find_gRNAs(
 
 
 def _seq_identity(a: str, b: str) -> float:
-    """Position-wise identity fraction (0-1) between two spacers, a proxy for
-    library-recombination risk (near-duplicate guides recombine in pooled libraries)."""
+    """Position-wise sequence identity fraction (0-1) between two spacers — the
+    direct driver of library recombination (homologous near-duplicate guides
+    recombine in pooled libraries), computed exactly, not estimated."""
     n = min(len(a), len(b))
     if n == 0:
         return 0.0
@@ -341,7 +343,7 @@ def design_multiplex(
 
     where on_target_value is the (strategy-adjusted) ranking value and
     max_identity_to_selected is the highest position-wise sequence identity to an
-    already-chosen guide (a recombination-risk proxy). Optional ``min_spacing``
+    already-chosen guide (the direct driver of recombination). Optional ``min_spacing``
     forbids two guides whose cut sites sit within N bp, avoiding redundant cuts.
     Fully transparent: every pick reports its marginal gain and why it was chosen.
     """
@@ -396,7 +398,7 @@ def design_multiplex(
         "pool_size": int(len(pool)),
         "mean_on_target": round(float(pool.loc[[r_i for r_i in chosen], "ConsensusScore"].mean()), 3) if chosen else 0.0,
         "mean_diversity": mean_div,          # 1 - mean pairwise identity (higher = more diverse)
-        "max_pairwise_identity": max_ident,  # recombination-risk proxy (lower = safer)
+        "max_pairwise_identity": max_ident,  # direct recombination driver (lower = safer)
         "span_bp": int(max(sel_starts) - min(sel_starts)) if sel_starts else 0,
         "diversity_weight": diversity_weight,
         "min_spacing": min_spacing,
@@ -528,6 +530,98 @@ def simulate_protein_edit(
     frameshift = (len(after) % 3) != (len(before) % 3)
     stop_lost = "*" in prot_after and "*" not in prot_before
     return prot_before, prot_after, frameshift, stop_lost
+
+
+_MMEJ_DECAY = 20.0   # deletion-length decay for MMEJ weighting (Bae 2014-style)
+_MMEJ_WINDOW = 20    # search microhomologies within +/- this many bp of the cut
+
+
+def _mmej_deletions(seq: str, cut: int, min_mh: int = 2, window: int = _MMEJ_WINDOW) -> list[dict]:
+    """Microhomology-mediated (MMEJ) deletion outcomes, derived from the sequence.
+
+    A left repeat ``seq[i:i+k]`` identical to a right repeat ``seq[j:j+k]``
+    (i+k<=cut<=j) lets MMEJ delete the intervening sequence plus one repeat copy
+    (deletion length j-i). The search is restricted to +/- ``window`` bp of the cut
+    because MMEJ deletions are local. Only left-maximal microhomologies are counted
+    so nested sub-repeats are not double-counted. Weight rises with microhomology
+    length/GC and falls with deletion length (Bae et al. 2014-style) — a relative
+    propensity, not a calibrated rate.
+    """
+    seq = seq.upper()
+    n = len(seq)
+    out = []
+    for i in range(max(0, cut - window), cut):
+        for j in range(cut, min(n, cut + window)):
+            if seq[i] != seq[j]:
+                continue
+            if i > 0 and seq[i - 1] == seq[j - 1]:   # not left-maximal -> part of a longer MH
+                continue
+            k = 0
+            while i + k < cut and j + k < n and seq[i + k] == seq[j + k]:
+                k += 1
+            if k < min_mh:
+                continue
+            mh = seq[i:i + k]
+            gc = mh.count("G") + mh.count("C")
+            del_len = j - i
+            weight = math.exp(-del_len / _MMEJ_DECAY) * (k + gc)
+            out.append({"del_len": del_len, "mh_len": k, "gc": gc, "weight": weight,
+                        "microhomology": mh})
+    return out
+
+
+def indel_distribution(seq: str, cut_index: int) -> dict:
+    """Predicted repair-outcome spectrum at a cut, from sequence-derivable channels.
+
+    Channels (both derived from the sequence, not assumed):
+      * **MMEJ deletions** — from microhomologies flanking the cut.
+      * **+1 templated insertion** — Cas9 duplicates the nucleotide 5' of the cut
+        (the dominant single insertion; Lieber; van Overbeek 2016).
+
+    Returns relative (not absolute) frequencies, an **out-of-frame / frameshift
+    probability** (the knockout-relevant quantity), and a **stop-gain probability**
+    (an outcome creates a premature stop). Honest scope: this covers the two
+    dominant *predictable* channels; a full locus-specific spectrum needs a trained
+    model (inDelphi / Lindel / FORECasT).
+    """
+    seq = seq.upper()
+    outcomes: list[dict] = []
+    for d in _mmej_deletions(seq, cut_index):
+        outcomes.append({"type": "deletion", "length": d["del_len"], "weight": d["weight"],
+                         "mechanism": f"MMEJ (µhom {d['mh_len']} nt: {d['microhomology']})"})
+    # +1 templated insertion: duplicate the base immediately 5' of the cut.
+    if 0 < cut_index <= len(seq):
+        ins_base = seq[cut_index - 1]
+        # Weighted comparably to a strong microhomology (the +1 insertion is a
+        # dominant channel); relative, clearly the non-MMEJ predictable outcome.
+        outcomes.append({"type": "insertion", "length": 1, "weight": 3.0,
+                         "mechanism": f"+1 insertion ({ins_base}, templated)"})
+
+    total = sum(o["weight"] for o in outcomes) or 1.0
+    for o in outcomes:
+        o["frequency"] = round(o["weight"] / total, 3)
+        o["frameshift"] = (o["length"] % 3) != 0
+        # Protein consequence of this specific outcome.
+        if o["type"] == "deletion":
+            edited = seq[:cut_index] + seq[cut_index + o["length"]:]
+        else:
+            edited = seq[:cut_index] + (ins_base * o["length"]) + seq[cut_index:]
+        prot = safe_translate(edited)
+        base_prot = safe_translate(seq)
+        o["stop_gain"] = "*" in prot and len(prot) < len(base_prot)
+        o.pop("weight", None)
+
+    outcomes.sort(key=lambda o: o["frequency"], reverse=True)
+    frameshift_p = round(sum(o["frequency"] for o in outcomes if o["frameshift"]), 3)
+    stop_p = round(sum(o["frequency"] for o in outcomes if o["stop_gain"]), 3)
+    return {
+        "outcomes": outcomes[:12],
+        "frameshift_probability": frameshift_p,
+        "stop_gain_probability": stop_p,
+        "n_microhomologies": sum(1 for o in outcomes if o["type"] == "deletion"),
+        "note": "Relative frequencies over sequence-predictable channels (MMEJ + "
+                "templated +1 insertion); not calibrated absolute rates.",
+    }
 
 
 def indel_simulations(seq: str, cut_index: int) -> pd.DataFrame:

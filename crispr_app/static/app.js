@@ -279,7 +279,7 @@ function renderOff(rows) {
 function renderPeg(rows) {
   const t = $("primeTable");
   if (!rows.length) { t.innerHTML = `<tbody><tr><td class="empty">No pegRNA found — try a target index nearer an NGG PAM.</td></tr></tbody>`; return; }
-  const head = `<thead><tr><th>#</th><th>Spacer</th><th>PAM</th><th>Nick</th><th>PBS</th><th>PBS Tm</th><th>RTT</th><th>Score</th></tr></thead>`;
+  const head = `<thead><tr><th>#</th><th>Spacer</th><th>PAM</th><th>Nick</th><th>PBS</th><th>PBS Tm</th><th>RTT</th><th title="3' extension secondary-structure propensity (lower = primes better)">Fold</th><th>Score</th></tr></thead>`;
   const body = rows.slice(0, 30).map((r, i) => `<tr>
     <td>${i + 1}</td>
     <td class="seq">${r.Spacer} ${copyBtn(r.Spacer)}</td>
@@ -288,6 +288,7 @@ function renderPeg(rows) {
     <td class="seq">${r.PBS_Seq}</td>
     <td>${r.PBS_Tm}</td>
     <td class="seq">${r.RTT_Seq}</td>
+    <td>${r.ExtStructure != null ? r.ExtStructure.toFixed(2) : "—"}</td>
     <td>${badge(r.Score)}</td>
   </tr>`).join("");
   t.innerHTML = head + `<tbody>${body}</tbody>`;
@@ -523,12 +524,29 @@ $("simBtn").onclick = async () => {
     });
     const flag = (on, label) =>
       `<span class="badge ${on ? "low" : "good"}">${label}: ${on ? "yes" : "no"}</span>`;
+    const sp = data.spectrum;
+    let spectrumHtml = "";
+    if (sp) {
+      const pct = (x) => Math.round(x * 100) + "%";
+      const rows = sp.outcomes.slice(0, 8).map((o) => `<tr>
+        <td>${o.type}</td><td>${o.length}</td><td>${pct(o.frequency)}</td>
+        <td>${o.frameshift ? "yes" : "no"}</td><td class="status" style="margin:0">${o.mechanism}</td></tr>`).join("");
+      spectrumHtml = `
+        <h4 style="margin-top:1rem">Predicted repair spectrum &nbsp;
+          <span class="badge ${sp.frameshift_probability >= 0.5 ? "good" : "mid"}">frameshift (out-of-frame): ${pct(sp.frameshift_probability)}</span>
+          <span class="badge ${sp.stop_gain_probability > 0 ? "good" : "mid"}">premature stop: ${pct(sp.stop_gain_probability)}</span>
+        </h4>
+        <table><thead><tr><th>Type</th><th>Len</th><th>Rel. freq</th><th>Frameshift</th><th>Mechanism</th></tr></thead><tbody>${rows}</tbody></table>
+        <p class="status">${sp.note}</p>`;
+    }
     $("simPanel").innerHTML = `
       <h4>Predicted protein consequence &nbsp; ${flag(data.frameshift, "frameshift")} ${flag(data.stop_lost, "stop lost")}</h4>
       <p class="status">Protein before (to first stop):</p><div class="seq">${data.protein_before || "—"}</div>
-      <p class="status" style="margin-top:.6rem">Protein after the edit:</p><div class="seq">${data.protein_after || "—"}</div>`;
+      <p class="status" style="margin-top:.6rem">Protein after the edit:</p><div class="seq">${data.protein_after || "—"}</div>
+      ${spectrumHtml}`;
     $("simPanel").classList.add("open");
-    setStatus($("simSummary"), `Simulated ${$("editType").options[$("editType").selectedIndex].text.toLowerCase()} at the cut site.`);
+    const fsMsg = sp ? ` Out-of-frame probability ${Math.round(sp.frameshift_probability * 100)}% over ${sp.n_microhomologies} microhomologies + templated insertion.` : "";
+    setStatus($("simSummary"), `Simulated ${$("editType").options[$("editType").selectedIndex].text.toLowerCase()} at the cut site.${fsMsg}`);
     toTable("indelTable", data.indel_panel);
   } catch (e) { setStatus($("simSummary"), e.message, true); $("simPanel").classList.remove("open"); }
   finally { busy(btn, false); }

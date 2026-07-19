@@ -17,6 +17,7 @@ from analysis import (
     design_prime_editing_pegRNAs,
     find_gRNAs,
     find_off_targets_detailed,
+    indel_distribution,
     indel_simulations,
     simulate_protein_edit,
     summarize_specificity,
@@ -167,6 +168,7 @@ def simulate(payload: SimulateRequest):
     cut = idx + payload.edit_offset
     before, after, frameshift, stop_lost = simulate_protein_edit(payload.dna_sequence, cut, payload.edit_type)
     indels = indel_simulations(payload.dna_sequence, cut)
+    spectrum = indel_distribution(payload.dna_sequence, cut)
 
     return {
         "protein_before": before,
@@ -174,6 +176,7 @@ def simulate(payload: SimulateRequest):
         "frameshift": frameshift,
         "stop_lost": stop_lost,
         "indel_panel": indels.to_dict(orient="records"),
+        "spectrum": spectrum,
     }
 
 

@@ -22,7 +22,7 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 
 ## 📸 The interface
 
-![CRISPR Precision Studio UI](docs/ui.png?v=43113d34)
+![CRISPR Precision Studio UI](docs/ui.png?v=464f4365)
 
 <sub>Rendered automatically by CI on every push — one **Score** per guide, with a per-feature **Details** breakdown.</sub>
 
@@ -62,7 +62,7 @@ account and no API keys.
 | ⚖️ | **Uncertainty-aware ranking** | Rank by *balanced*, *conservative* (pessimistic CI bound), *robust* (uncertainty-penalised), or *optimistic* — turn the interval into a decision, not just a display. |
 | 🧬 | **Both-strand off-targets** | Vectorised NumPy scan + per-site **CFD** & **MIT/Hsu** + aggregate specificity. |
 | 🌍 | **Genome-wide search** | Stream any (multi-chromosome) FASTA; memory-safe chunked scan, both strands. |
-| 🧫 | **Edit-outcome simulation** | Predict the protein consequence of a cut — frameshift, stop loss, indel panel. |
+| 🧫 | **Edit-outcome simulation** | Protein consequence of a cut + a **sequence-derived repair spectrum** (MMEJ microhomology deletions, templated +1 insertion) with an **out-of-frame / knockout probability**. |
 | 🧪 | **Base Editing Studio** | Per-guide window efficiency, **bystander** edits, **editing purity**, and a composite BE score — not just "editable yes/no". |
 | 🧬 | **Multiplex library designer** | Greedy marginal-gain selection of a strong **and diverse** guide set — avoids the near-duplicates that recombine in pooled libraries. |
 | 🌟 | **Prime Editing Studio** | PRIDICT2.0-informed pegRNA design (Spacer + RTT + PBS). |
@@ -335,7 +335,7 @@ For a target base substitution, `prime.py` enumerates and ranks candidate pegRNA
 3. **RTT (reverse-transcriptase template).** Enumerate lengths 10–20 nt; the RTT encodes the edit and must retain **≥3 nt of 3′ homology past the edit** for flap resolution. Penalties: RTT that **begins with C** (destabilises the edited flap) and RTT GC far from ~55%. Length term favours ~12 nt.
 4. **Ranking.** A calibrated logistic score blends the PBS T<sub>m</sub>, PBS/RTT length terms, 3′-homology constraint, RTT-starts-with-C penalty, and GC term into one 0–1 `Score`.
 
-> The pegRNA score is PRIDICT2.0-*informed*, not the trained PRIDICT2.0 network. It reproduces the published determinants for ranking; it has not yet been numerically benchmarked against a PRIDICT test set (on the roadmap). No secondary-structure (e.g. RNAfold) penalty is applied yet.
+> The pegRNA score is PRIDICT2.0-*informed*, not the trained PRIDICT2.0 network. It reproduces the published determinants for ranking; it has not yet been numerically benchmarked against a PRIDICT test set (on the roadmap). A **lightweight 3′-extension secondary-structure penalty** is applied (dependency-free Nussinov max-base-pairing, shown as `ExtStructure`/**Fold**) — a structure *propensity*, not an RNAfold free energy.
 
 ---
 

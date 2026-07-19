@@ -166,9 +166,9 @@
         <div class="card-head">
           <span class="step">3</span>
           <h2>Edit outcome simulation</h2>
-          <span class="sub">protein · frameshift · indels</span>
+          <span class="sub">protein · repair spectrum · frameshift %</span>
         </div>
-        <p class="status">Predict the protein consequence of a cut. Pick a designed guide (+ strand) and an edit, and see the before/after protein, frameshift, and an indel panel.</p>
+        <p class="status">Predict the consequence of a cut. Pick a designed guide (+ strand) and an edit to see the before/after protein — plus a <b>sequence-derived repair spectrum</b>: the likely MMEJ microhomology deletions and templated +1 insertion, with an <b>out-of-frame (knockout) probability</b> and premature-stop probability. Relative frequencies, not calibrated rates.</p>
         <div class="grid">
           <label>Guide (from design)
             <select id="simGuide"><option value="">— design guides first —</option></select>
@@ -205,7 +205,7 @@
           <h2>Prime Editing Studio</h2>
           <span class="sub">pegRNA · Spacer + RTT + PBS</span>
         </div>
-        <p class="status">Design pegRNAs for single-base substitutions, ranked by PRIDICT2.0-informed determinants (PBS T<sub>m</sub> ≈ 37 °C, RTT/PBS length, 3′ homology).</p>
+        <p class="status">Design pegRNAs for single-base substitutions, ranked by PRIDICT2.0-informed determinants (PBS T<sub>m</sub> ≈ 37 °C, RTT/PBS length, 3′ homology) plus a lightweight <b>3′-extension secondary-structure</b> penalty (a self-folding extension can't prime — shown as <b>Fold</b>).</p>
         <div class="grid">
           <label>Target index (0-based) <input type="number" id="primePos" value="40" min="0" /></label>
           <label>Desired base
