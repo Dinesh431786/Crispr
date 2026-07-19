@@ -86,26 +86,28 @@ The gapped-dinucleotide + k-mer step alone lifted the held-out mean +0.015 while
 improving every one of the three cross-datasets; the ranking-target swap added
 the final transfer gain on the noisiest set.
 
-### Good-vs-bad separation (AUC) — the metric that matches the task
+### Good-vs-bad separation (AUC) — a cleaner metric, honestly contextualised
 
-Spearman over *every* guide (0.767) is capped by label noise: guides with nearly
-equal true efficiency get mis-ordered in the mushy middle, and that ceiling is the
-assay's own reproducibility (~0.77). But **the tool's actual job is telling an
-effective guide from an ineffective one** — a cleaner question, far less
-noise-limited. Measured as classification AUC on the shipped model (Kim, 5-fold CV):
+Telling an *effective* guide from an *ineffective* one is easier than pinning the
+exact value of an ambiguous middling guide, so classification AUC runs higher than
+the 0.767 Spearman. On the shipped model (Kim, 5-fold OOF), with baselines:
 
-| Task | AUC | Accuracy |
-|---|:---:|:---:|
-| effective vs ineffective (top⅓ vs bottom⅓) | **0.953** | 0.886 |
-| top-quartile vs bottom-quartile | **0.971** | 0.919 |
-| top-decile vs bottom-decile | **0.982** | 0.948 |
+| Task | our model | GC-content only | random | noisy replicate¹ |
+|---|:---:|:---:|:---:|:---:|
+| top⅓ vs bottom⅓ | **0.953** | 0.614 | 0.501 | 0.968 |
+| top-quartile vs bottom-quartile | **0.971** | 0.629 | 0.500 | 0.983 |
+| top-decile vs bottom-decile | **0.982** | 0.692 | 0.500 | 0.997 |
 
-This is the *same model*, no new data — it is not "beating" the wet-lab ceiling
-(impossible), it is **measuring the right task**. Both numbers are honest and
-reported together: 0.767 = "pin the exact value of every guide, noise included";
-0.95 = "separate winners from losers", which is what you actually do when you pick
-guides. Reproduced by `scripts/build_default_model.py` (prints the AUCs) and
-unit-tested (`tests/test_benchmark.py`).
+The model carries real signal — far above GC-alone (0.61) or random (0.50).
+**But this is _not_ a breakthrough past the noise ceiling, and we do not claim
+it is.** ¹ A synthetic replicate that merely adds noise to the labels at the
+assay's own reproducibility (ρ≈0.78) scores AUC ~0.97–1.0 on the *same* task —
+consistently *higher* than our model. So ~0.95 is the **assay's intrinsic
+separability of the extremes**, not something our model cracked; it is the same
+"matches the assay's own reproducibility" story as the 0.767 Spearman, on a metric
+that happens to sit near 0.9–1.0. We report it because separation is what you act
+on when you pick guides — not to dress up a 0.9. Reproduced by
+`scripts/build_default_model.py` (prints the AUCs) and unit-tested.
 
 Wet-lab replicates of the *same* guide agree only at ρ≈0.71–0.77 (Haeussler 2016),
 so the Spearman **matches the assay's own reproducibility** — on par with DeepSpCas9

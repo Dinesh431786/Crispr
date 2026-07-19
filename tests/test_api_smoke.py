@@ -45,8 +45,10 @@ def test_explain_has_interval(guides):
 
 
 def test_sensitivity(guides):
-    out = client.post("/api/sensitivity", json={"guide": guides[0]}).json()
-    assert len(out["substitutions"]) == (len(guides[0]) - 0) * 3 or len(out["substitutions"]) > 0
+    g = guides[0]
+    out = client.post("/api/sensitivity", json={"guide": g}).json()
+    assert len(out["substitutions"]) == len(g) * 3   # every position × 3 alternative bases
+    assert len(out["per_position"]) == len(g)
     assert "best" in out and "worst" in out
 
 

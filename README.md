@@ -225,12 +225,14 @@ home set**. Every step gated on cross-dataset transfer.
 > We don't claim to beat the wet lab; we *match its reproducibility* — NumPy-only,
 > zero setup. Cross-dataset ρ is low (~0.15–0.4) for *every* tool, giants included.
 
-> 🥇 **Separating good guides from bad — the task you actually care about — the
-> model hits AUC 0.95** (top⅓ vs bottom⅓; 0.97 quartiles, 0.98 deciles; 89–95%
-> accuracy). Same model, no new data: ρ=0.767 is "pin the exact value of every
-> guide including the noisy middle"; **AUC=0.95 is "pick winners from losers"** —
-> which is what picking guides *is*. Both are honest and reported together
-> ([BENCHMARKS.md](BENCHMARKS.md#good-vs-bad-separation-auc--the-metric-that-matches-the-task)).
+> **Separating good guides from bad** — the task you act on — runs at **AUC ≈ 0.95**
+> (top⅓ vs bottom⅓; 0.97 quartiles, 0.98 deciles), well above GC-only (0.61) or
+> random (0.50). Honest caveat: this is *not* a breakthrough past the noise ceiling —
+> a replicate that just adds assay-level noise (ρ≈0.78) scores ~0.97 on the same
+> task, so ~0.95 is the assay's own separability of the extremes, the same
+> "matches its reproducibility" story as the 0.767 Spearman, on a cleaner metric.
+> We report it because separation is what you act on, not to claim we cracked 0.9
+> ([details](BENCHMARKS.md#good-vs-bad-separation-auc--a-cleaner-metric-honestly-contextualised)).
 
 Every score is also **explainable and ships with a calibrated confidence
 interval**; wet-lab validation remains essential.
