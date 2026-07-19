@@ -32,7 +32,7 @@ try:  # Works both as top-level modules (uvicorn main:app) and as a package (tes
     from scoring import on_target_score
     from models import predict_on_target, predict_interval
     from crisprscan import score_from_context as crisprscan_context
-    from base_edit import editable_targets
+    from base_edit import assess as base_edit_assess
 except ImportError:  # pragma: no cover - import-context fallback
     from .offtarget import (
         CFD_SCORES,
@@ -46,7 +46,7 @@ except ImportError:  # pragma: no cover - import-context fallback
     from .scoring import on_target_score
     from .models import predict_on_target, predict_interval
     from .crisprscan import score_from_context as crisprscan_context
-    from .base_edit import editable_targets
+    from .base_edit import assess as base_edit_assess
 
 __all__ = [
     "ScoringConfig",
@@ -163,17 +163,21 @@ def _strategy_value(df: pd.DataFrame, strategy: str) -> np.ndarray:
 
 
 def _base_edit_factor(guide: str, editor: str = "any") -> tuple[float, str]:
-    """(centrality factor in [0,1], 'C5,A7' tag) for base-editable targets in the
-    activity window. 0 when the guide has no editable base for the chosen editor."""
-    targets = editable_targets(guide)
-    if editor in ("ABE", "CBE"):
-        targets = [t for t in targets if t["editor"] == editor]
-    if not targets:
+    """(base-edit fitness in [0,1], tag) for the chosen editor(s).
+
+    Uses the full window-efficiency x editing-purity composite from
+    :mod:`base_edit` (penalises bystander edits), not just window centrality.
+    0 when the guide has no editable base for the chosen editor.
+    """
+    editors = ("CBE", "ABE") if editor == "any" else (editor,)
+    best = max((base_edit_assess(guide, e) for e in editors),
+               key=lambda a: a["be_score"], default=None)
+    if best is None or not best["editable"]:
         return 0.0, ""
-    # Editing efficiency peaks near window position ~6; weight by centrality.
-    factor = max(np.exp(-((t["pos"] - 6) / 2.0) ** 2) for t in targets)
-    tag = ",".join(f"{t['editor'][0]}{t['pos']}" for t in targets)
-    return round(float(factor), 3), tag
+    tag = f"{best['editor'][0]}{best['target_pos']}"
+    if best["bystanders"]:
+        tag += f" +{len(best['bystanders'])}by"
+    return float(best["be_score"]), tag
 
 
 def find_gRNAs(
@@ -304,6 +308,101 @@ def find_gRNAs(
         return _rank_by(df, fitness)
 
     return df.sort_values("RankValue", ascending=False).reset_index(drop=True)
+
+
+def _seq_identity(a: str, b: str) -> float:
+    """Position-wise identity fraction (0-1) between two spacers, a proxy for
+    library-recombination risk (near-duplicate guides recombine in pooled libraries)."""
+    n = min(len(a), len(b))
+    if n == 0:
+        return 0.0
+    return sum(1 for i in range(n) if a[i] == b[i]) / n
+
+
+def design_multiplex(
+    dna_seq: str,
+    n_guides: int = 6,
+    pam: str = "NGG",
+    guide_length: int = 20,
+    min_gc: int = 40,
+    max_gc: int = 70,
+    goal: str = "general",
+    ranking_strategy: str = "balanced",
+    diversity_weight: float = 0.5,
+    min_spacing: int = 0,
+    pool_size: int = 120,
+) -> tuple[pd.DataFrame, dict]:
+    """Greedy marginal-gain designer for a multiplex / pooled guide set.
+
+    Picks ``n_guides`` that are individually strong yet collectively *diverse*:
+    at each step it adds the candidate maximising
+
+        marginal_gain = on_target_value - diversity_weight * max_identity_to_selected
+
+    where on_target_value is the (strategy-adjusted) ranking value and
+    max_identity_to_selected is the highest position-wise sequence identity to an
+    already-chosen guide (a recombination-risk proxy). Optional ``min_spacing``
+    forbids two guides whose cut sites sit within N bp, avoiding redundant cuts.
+    Fully transparent: every pick reports its marginal gain and why it was chosen.
+    """
+    df = find_gRNAs(dna_seq, pam=pam, guide_length=guide_length, min_gc=min_gc,
+                    max_gc=max_gc, goal=goal, ranking_strategy=ranking_strategy)
+    if df.empty:
+        return df, {"requested": n_guides, "selected": 0, "note": "no candidate guides"}
+
+    pool = df.head(pool_size).reset_index(drop=True)
+    value = pool["RankValue"].astype(float).to_numpy() if "RankValue" in pool.columns \
+        else pool["ConsensusScore"].astype(float).to_numpy()
+    starts = pool["Start"].astype(int).to_numpy()
+    seqs = pool["gRNA"].tolist()
+
+    chosen: list[int] = []
+    remaining = set(range(len(pool)))
+    records = []
+    while len(chosen) < n_guides and remaining:
+        best_i, best_gain, best_sim = None, -1e9, 0.0
+        for i in list(remaining):
+            if min_spacing > 0 and any(abs(int(starts[i]) - int(starts[j])) < min_spacing for j in chosen):
+                continue
+            sim = max((_seq_identity(seqs[i], seqs[j]) for j in chosen), default=0.0)
+            gain = value[i] - diversity_weight * sim
+            if gain > best_gain:
+                best_i, best_gain, best_sim = i, gain, sim
+        if best_i is None:  # everything left violates spacing
+            break
+        chosen.append(best_i)
+        remaining.discard(best_i)
+        g = pool.iloc[best_i]
+        reason = (f"score {g['ConsensusScore']:.2f}" +
+                  (f", {best_sim:.0%} max similarity to the set" if chosen[:-1] else ", seed (highest score)"))
+        records.append({**g.to_dict(),
+                        "MarginalGain": round(float(best_gain), 3),
+                        "MaxSimilarity": round(float(best_sim), 3),
+                        "Reason": reason})
+
+    picked = pd.DataFrame(records)
+    # Collective summary.
+    if len(picked) >= 2:
+        idents = [_seq_identity(records[a]["gRNA"], records[b]["gRNA"])
+                  for a in range(len(records)) for b in range(a + 1, len(records))]
+        max_ident = round(max(idents), 3)
+        mean_div = round(1 - float(np.mean(idents)), 3)
+    else:
+        max_ident, mean_div = 0.0, 1.0
+    sel_starts = [r["Start"] for r in records]
+    summary = {
+        "requested": n_guides,
+        "selected": len(picked),
+        "pool_size": int(len(pool)),
+        "mean_on_target": round(float(pool.loc[[r_i for r_i in chosen], "ConsensusScore"].mean()), 3) if chosen else 0.0,
+        "mean_diversity": mean_div,          # 1 - mean pairwise identity (higher = more diverse)
+        "max_pairwise_identity": max_ident,  # recombination-risk proxy (lower = safer)
+        "span_bp": int(max(sel_starts) - min(sel_starts)) if sel_starts else 0,
+        "diversity_weight": diversity_weight,
+        "min_spacing": min_spacing,
+        "ranking_strategy": ranking_strategy,
+    }
+    return picked, summary
 
 
 def count_mismatches(a: str, b: str) -> int:

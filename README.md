@@ -22,7 +22,7 @@ Transparent guide *prioritization*: interpretable on-target scoring, both-strand
 
 ## 📸 The interface
 
-![CRISPR Precision Studio UI](docs/ui.png?v=0b08469f)
+![CRISPR Precision Studio UI](docs/ui.png?v=b9b18e52)
 
 <sub>Rendered automatically by CI on every push — one **Score** per guide, with a per-feature **Details** breakdown.</sub>
 
@@ -63,6 +63,8 @@ account and no API keys.
 | 🧬 | **Both-strand off-targets** | Vectorised NumPy scan + per-site **CFD** & **MIT/Hsu** + aggregate specificity. |
 | 🌍 | **Genome-wide search** | Stream any (multi-chromosome) FASTA; memory-safe chunked scan, both strands. |
 | 🧫 | **Edit-outcome simulation** | Predict the protein consequence of a cut — frameshift, stop loss, indel panel. |
+| 🧪 | **Base Editing Studio** | Per-guide window efficiency, **bystander** edits, **editing purity**, and a composite BE score — not just "editable yes/no". |
+| 🧬 | **Multiplex library designer** | Greedy marginal-gain selection of a strong **and diverse** guide set — avoids the near-duplicates that recombine in pooled libraries. |
 | 🌟 | **Prime Editing Studio** | PRIDICT2.0-informed pegRNA design (Spacer + RTT + PBS). |
 | 📚 | **Peer-reviewed scoring** | **CRISPRscan** weights reproduced verbatim & unit-validated — zero downloads. |
 | 🔌 | **Pluggable models** | `onnx → trained-linear → heuristic`, auto-selected and reported. |
@@ -290,6 +292,8 @@ Browser renders one ranked table
 | `POST /api/offtargets` | per-site CFD/MIT hits + per-guide specificity (pasted background) |
 | `POST /api/offtargets-genome` | genome-wide scan over a (multi-record) FASTA, both strands |
 | `POST /api/simulate` | protein / indel outcome of an edit |
+| `POST /api/base-edit` | per-guide ABE/CBE window efficiency, bystanders, editing purity, composite BE score |
+| `POST /api/design-multiplex` | greedy marginal-gain pooled/multiplex guide set (strong + diverse) |
 | `POST /api/prime-design` | ranked pegRNAs (Spacer + RTT + PBS) |
 | `POST /api/explain` | per-feature breakdown + conformal confidence interval |
 | `POST /api/upload-fasta` | parse pasted FASTA / plain DNA |

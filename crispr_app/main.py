@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from starlette.requests import Request
 
 from analysis import (
+    design_multiplex,
     design_prime_editing_pegRNAs,
     find_gRNAs,
     find_off_targets_detailed,
@@ -250,13 +251,50 @@ def offtargets_genome(payload: GenomeOffTargetRequest):
 
 class BaseEditRequest(BaseModel):
     guides: list[str]
+    editor: str = "any"     # "ABE" | "CBE" | "any"
 
 
 @app.post("/api/base-edit")
 def base_edit(payload: BaseEditRequest):
-    """ABE/CBE editable positions within the base-editing activity window."""
+    """Base-editing (ABE/CBE) studio: per guide, window efficiency, bystander
+    edits, editing purity, and a composite base-edit score with an explanation."""
+    editor = payload.editor if payload.editor in ("ABE", "CBE", "any") else "any"
     guides = [g.strip().upper() for g in payload.guides if g.strip()][:500]
-    return {"results": [base_edit_summarize(g) for g in guides]}
+    results = [base_edit_summarize(g, editor) for g in guides]
+    results.sort(key=lambda r: r["be_score"], reverse=True)
+    return {"editor": editor, "results": results}
+
+
+class MultiplexRequest(BaseModel):
+    dna_sequence: str = Field(..., min_length=23, max_length=MAX_SEQ)
+    n_guides: int = Field(6, ge=2, le=30)
+    pam: str = "NGG"
+    guide_length: int = Field(20, ge=18, le=25)
+    min_gc: int = Field(40, ge=30, le=80)
+    max_gc: int = Field(70, ge=40, le=90)
+    goal: str = "general"
+    ranking_strategy: str = "balanced"
+    diversity_weight: float = Field(0.5, ge=0.0, le=2.0)
+    min_spacing: int = Field(0, ge=0, le=1000)
+
+
+@app.post("/api/design-multiplex")
+def design_multiplex_endpoint(payload: MultiplexRequest):
+    """Greedy marginal-gain designer for a multiplex / pooled guide library:
+    individually strong yet collectively diverse (low recombination risk)."""
+    ok, cleaned = validate_sequence(payload.dna_sequence)
+    if not ok:
+        raise HTTPException(status_code=400, detail=cleaned)
+    goal = payload.goal if payload.goal in ("general", "knockout", "knockin", "crispri", "baseedit") else "general"
+    strategy = payload.ranking_strategy if payload.ranking_strategy in (
+        "balanced", "conservative", "robust", "optimistic") else "balanced"
+    picked, summary = design_multiplex(
+        cleaned, n_guides=payload.n_guides, pam=payload.pam,
+        guide_length=payload.guide_length, min_gc=payload.min_gc, max_gc=payload.max_gc,
+        goal=goal, ranking_strategy=strategy,
+        diversity_weight=payload.diversity_weight, min_spacing=payload.min_spacing,
+    )
+    return {"summary": summary, "guides": picked.to_dict(orient="records")}
 
 
 @app.get("/api/models")

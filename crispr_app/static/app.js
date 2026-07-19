@@ -470,14 +470,24 @@ $("baseBtn").onclick = async () => {
   const btn = $("baseBtn");
   busy(btn, true, "Scanning…");
   try {
-    const data = await postJSON("/api/base-edit", { guides: lastGuides.map((g) => g.gRNA) });
-    const rows = data.results.filter((r) => r.editable).map((r) => ({
-      Guide: r.gRNA,
-      "CBE (C→T) positions": r.CBE_positions.join(", ") || "—",
-      "ABE (A→G) positions": r.ABE_positions.join(", ") || "—",
-    }));
+    const data = await postJSON("/api/base-edit", { guides: lastGuides.map((g) => g.gRNA), editor: "any" });
+    const editable = data.results.filter((r) => r.editable);
+    const rows = editable.map((r) => {
+      const a = r.assessments[r.best_editor] || {};
+      return {
+        Guide: r.gRNA,
+        Editor: r.best_editor,
+        "Target pos": a.target_pos ?? "—",
+        "Window eff": a.efficiency != null ? a.efficiency.toFixed(2) : "—",
+        Purity: a.purity != null ? Math.round(a.purity * 100) + "%" : "—",
+        Bystanders: a.bystanders ? a.bystanders.length : 0,
+        "BE score": r.be_score != null ? Math.round(r.be_score * 100) : "—",
+      };
+    });
     toTable("baseTable", rows);
-    setStatus($("baseSummary"), `${rows.length} of ${data.results.length} guides have a base editable in the 4–8 window (CBE C→T or ABE A→G).`);
+    const top = editable[0];
+    const note = top ? ` Best: ${top.explanation}` : "";
+    setStatus($("baseSummary"), `${editable.length} of ${data.results.length} guides are base-editable — ranked by window-efficiency × purity (bystander-penalised).${note}`);
   } catch (e) { setStatus($("baseSummary"), e.message, true); }
   finally { busy(btn, false); }
 };
@@ -524,10 +534,49 @@ $("simBtn").onclick = async () => {
   finally { busy(btn, false); }
 };
 
+let lastMplex = [];
+$("mplexBtn").onclick = async () => {
+  const btn = $("mplexBtn");
+  busy(btn, true, "Selecting…");
+  try {
+    const data = await postJSON("/api/design-multiplex", {
+      dna_sequence: $("dna").value,
+      n_guides: Number($("mplexN").value),
+      pam: $("pam").value,
+      guide_length: Number($("guideLength").value),
+      min_gc: Number($("minGc").value),
+      max_gc: Number($("maxGc").value),
+      goal: $("goal").value,
+      ranking_strategy: $("rankStrategy").value,
+      diversity_weight: Number($("mplexDiv").value),
+      min_spacing: Number($("mplexSpacing").value),
+    });
+    lastMplex = data.guides || [];
+    const rows = lastMplex.map((g, i) => ({
+      "#": i + 1,
+      Guide: g.gRNA,
+      Strand: g.Strand,
+      Start: g.Start,
+      Score: score100(g.ConsensusScore),
+      "Marginal gain": g.MarginalGain,
+      "Max similarity": g.MaxSimilarity != null ? Math.round(g.MaxSimilarity * 100) + "%" : "—",
+      Why: g.Reason,
+    }));
+    toTable("mplexTable", rows);
+    const s = data.summary;
+    setStatus($("mplexSummary"),
+      `Selected ${s.selected}/${s.requested} from ${s.pool_size} candidates — mean score ${Math.round(s.mean_on_target * 100)}, ` +
+      `diversity ${Math.round(s.mean_diversity * 100)}% (max pairwise identity ${Math.round(s.max_pairwise_identity * 100)}%), span ${s.span_bp} bp.`);
+    $("exportMplexBtn").disabled = !lastMplex.length;
+  } catch (e) { setStatus($("mplexSummary"), e.message, true); }
+  finally { busy(btn, false); }
+};
+
 /* export */
 $("exportGuidesBtn").onclick = () => download("guides.csv", toCSV(lastGuides));
 $("exportOffBtn").onclick = () => download("offtargets.csv", toCSV(lastOff));
 $("exportPrimeBtn").onclick = () => download("pegrnas.csv", toCSV(lastPeg));
+$("exportMplexBtn").onclick = () => download("multiplex_library.csv", toCSV(lastMplex));
 
 /* delegated: copy + explain */
 document.addEventListener("click", async (e) => {

@@ -24,6 +24,7 @@
           <a href="#simulate">Edit outcome</a>
           <a href="#baseedit">Base editing</a>
           <a href="#prime">Prime Editing</a>
+          <a href="#multiplex">Multiplex</a>
           <a href="https://github.com/Dinesh431786/Crispr#-api-reference" target="_blank" rel="noopener">API docs</a>
         </nav>
       </div>
@@ -189,11 +190,11 @@
       <section class="card" id="baseedit">
         <div class="card-head">
           <span class="step">4</span>
-          <h2>Base editing (ABE / CBE)</h2>
-          <span class="sub">activity window 4–8</span>
+          <h2>Base Editing Studio (ABE / CBE)</h2>
+          <span class="sub">window efficiency · bystander · purity</span>
         </div>
-        <p class="status">Find guides whose designed protospacer has a base editable by an adenine (A→G) or cytosine (C→T) base editor within the activity window (positions 4–8).</p>
-        <div class="row"><button id="baseBtn" disabled>Find base-editable guides</button></div>
+        <p class="status">For each designed guide, score base editing in the activity window (positions 4–8): the <b>window efficiency</b> of the target base (peak ~position 6), any <b>bystander</b> bases the editor would also hit, the resulting <b>editing purity</b>, and a composite <b>BE score</b> = efficiency × purity (higher = cleaner, more efficient single edit).</p>
+        <div class="row"><button id="baseBtn" disabled>Score base editing</button></div>
         <p class="status" id="baseSummary">Design guides first.</p>
         <div class="table-wrap"><table id="baseTable"></table></div>
       </section>
@@ -220,6 +221,26 @@
         </div>
         <p class="status" id="primeSummary"></p>
         <div class="table-wrap"><table id="primeTable"><tbody><tr><td class="empty">Ranked pegRNAs appear here.</td></tr></tbody></table></div>
+      </section>
+
+      <section class="card" id="multiplex">
+        <div class="card-head">
+          <span class="step">6</span>
+          <h2>Multiplex / Pooled Library Designer</h2>
+          <span class="sub">greedy marginal-gain · diverse set</span>
+        </div>
+        <p class="status">Pick a small set of guides for the current target that are individually strong <b>and collectively diverse</b> — a greedy optimiser adds, at each step, the guide with the best <b>marginal gain</b> = score − diversity × similarity-to-the-set. Diverse sets avoid the repetitive sequences that drive recombination in pooled libraries. Uses the <b>Editing goal</b> and <b>Ranking</b> chosen above.</p>
+        <div class="grid">
+          <label>Guides in set <input type="number" id="mplexN" value="6" min="2" max="30" /></label>
+          <label title="0 = ignore similarity, higher = favour diversity more strongly">Diversity weight <input type="number" id="mplexDiv" value="0.5" min="0" max="2" step="0.1" /></label>
+          <label title="Minimum bp between two selected cut sites (0 = no constraint)">Min spacing (bp) <input type="number" id="mplexSpacing" value="0" min="0" max="1000" /></label>
+        </div>
+        <div class="row">
+          <button id="mplexBtn">Design library</button>
+          <button class="ghost" id="exportMplexBtn" disabled>Export CSV</button>
+        </div>
+        <p class="status" id="mplexSummary">Paste a sequence above, then design a diverse guide set.</p>
+        <div class="table-wrap"><table id="mplexTable"><tbody><tr><td class="empty">Selected library appears here.</td></tr></tbody></table></div>
       </section>
     </main>
 

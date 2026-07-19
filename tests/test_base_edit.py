@@ -1,4 +1,4 @@
-from crispr_app.base_edit import editable_targets, summarize
+from crispr_app.base_edit import assess, editable_targets, position_weight, summarize
 
 
 def test_cbe_target_in_window():
@@ -26,3 +26,27 @@ def test_summarize_shape():
     assert s["CBE_positions"] == [5]
     assert s["ABE_positions"]  # A's at positions 4,6,7,8...
     assert s["window"] == "4-8"
+
+
+def test_window_efficiency_peaks_at_center():
+    # The position-weight profile peaks near position 6 and decays to the edges.
+    assert position_weight(6) == max(position_weight(p) for p in range(4, 9))
+    assert position_weight(4) < position_weight(6)
+    assert position_weight(1) == 0.0  # outside the window
+
+
+def test_purity_penalises_bystanders():
+    # One C in the window -> clean single edit (purity 1.0).
+    clean = assess("AAAAACAAAAAAAAAAAAAA", "CBE")  # C at position 6 only
+    assert clean["editable"] and not clean["bystanders"]
+    assert clean["purity"] == 1.0
+    # Two C's in the window -> bystander -> purity < 1 and lower composite score.
+    byst = assess("AAACACAAAAAAAAAAAAAA", "CBE")  # C at positions 4 and 6
+    assert byst["bystanders"]
+    assert byst["purity"] < 1.0
+    assert byst["be_score"] < clean["be_score"]
+
+
+def test_assess_not_editable():
+    a = assess("TTTTTTTTTTTTTTTTTTTT", "CBE")  # no C anywhere
+    assert a["editable"] is False and a["be_score"] == 0.0

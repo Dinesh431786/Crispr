@@ -133,11 +133,37 @@ of "aware-from-the-start":
 | Knockout | model | out-of-frame / frameshift (ρ=0.728; a dedicated model) |
 | Knock-in (HDR) | objective | cutting × exp(−cut-to-edit / 10 bp) |
 | CRISPRi/a | objective | activity × exp(−bind-to-TSS / 75 bp) |
-| Base editing | constraint | activity × window-centrality; only guides with a C/A in positions 4–8 |
+| Base editing | constraint | window efficiency × editing purity (see below) |
 
 Honest scope: knockout is a *correctness* gain (out-of-frame correlates 0.937 with
 cutting), not an accuracy jump; the proximity/constraint modes are deterministic
 mechanism, not statistical claims. Each re-ranking is unit-tested.
+
+## Base Editing Studio (efficiency × purity)
+
+For each guide and editor (CBE C→T, ABE A→G) we score, inside the 4–8 activity
+window: a **position-weighted window efficiency** (Gaussian profile peaked near
+position ~6, approximating the published BE3/ABE7.10-class window — Komor 2016,
+Gaudelli 2017; *relative* weights, not absolute rates), the **bystander** bases
+of the same type the editor would also hit, and the resulting **editing purity**
+= intended-site weight / all-editable weight. The composite **BE score** =
+efficiency × purity rewards a target base at a high-efficiency position that is
+also a *clean* single edit. Honest scope: the position profile is an approximation
+for ranking, not a calibrated per-locus rate; multiply by specificity when
+off-target data is available. Unit-tested (`tests/test_base_edit.py`).
+
+## Multiplex / pooled library designer (greedy marginal-gain)
+
+Selects a set that is individually strong *and* collectively diverse. At each
+step it adds the guide maximising `marginal_gain = ranking_value − diversity ×
+max_identity_to_selected`, where identity is the position-wise sequence identity
+to an already-chosen guide (a recombination-risk proxy); optional `min_spacing`
+forbids cut sites within N bp. Every pick reports its marginal gain and why it was
+chosen, and the set reports mean score, mean pairwise diversity, and max pairwise
+identity. Honest scope: greedy is not guaranteed optimal (a global ILP could do
+marginally better) and diversity here is a *sequence* proxy — genome-wide
+off-target-aware selection layers on the existing CFD/MIT machinery when a
+background is supplied. Unit-tested (`tests/test_multiplex.py`).
 
 ## The prediction ceiling (why not higher)
 
